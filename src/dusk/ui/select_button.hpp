@@ -3,6 +3,7 @@
 #include "component.hpp"
 #include "ui.hpp"
 
+#include <cstddef>
 #include <functional>
 #include <utility>
 
@@ -22,6 +23,7 @@ public:
 
     SelectButton(Rml::Element* parent, Props props);
 
+    void update() override;
     virtual bool modified() const;
     void set_modified(bool value);
     void set_value_label(const Rml::String& value);
@@ -35,6 +37,8 @@ protected:
     Rml::Element* mKeyElem = nullptr;
     Rml::Element* mIconElem = nullptr;
     Rml::Element* mValueElem = nullptr;
+    std::size_t mKeyLocalizationGeneration = static_cast<std::size_t>(-1);
+    std::size_t mValueLocalizationGeneration = static_cast<std::size_t>(-1);
 };
 
 class BaseControlledSelectButton : public SelectButton {

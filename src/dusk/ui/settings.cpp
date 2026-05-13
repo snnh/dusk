@@ -15,6 +15,7 @@
 #include "dusk/main.h"
 #include "dusk/discord_presence.hpp"
 #include "graphics_tuner.hpp"
+#include "localization.hpp"
 #include "m_Do/m_Do_main.h"
 #include "menu_bar.hpp"
 #include "number_button.hpp"
@@ -1152,6 +1153,45 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "replacements, and other app data.");
             });
 #endif
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "UI Language",
+                .getValue =
+                    [] {
+                        const auto configured = getSettings().backend.uiLanguage.getValue();
+                        for (const auto& language : localization::available_languages()) {
+                            if (configured == language.id) {
+                                return Rml::String{language.name};
+                            }
+                        }
+                        return Rml::String{localization::available_languages().front().name};
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().backend.uiLanguage.getValue() !=
+                               getSettings().backend.uiLanguage.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                for (const auto& language : localization::available_languages()) {
+                    pane.add_button({
+                        .text = Rml::String{language.name},
+                        .isSelected =
+                            [id = Rml::String{language.id}] {
+                                return getSettings().backend.uiLanguage.getValue() == id;
+                            },
+                    }).on_pressed([id = std::string{language.id}] {
+                        if (getSettings().backend.uiLanguage.getValue() == id) {
+                            return;
+                        }
+                        getSettings().backend.uiLanguage.setValue(id);
+                        config::Save();
+                        localization::reload();
+                        mDoAud_seStartMenu(kSoundItemChange);
+                    });
+                }
+            });
         leftPane.register_control(
             leftPane.add_select_button({
                 .key = "Notifications",

@@ -2,6 +2,8 @@
 
 #include "component.hpp"
 
+#include <cstddef>
+
 namespace dusk::ui {
 
 using ButtonCallback = std::function<void()>;
@@ -16,6 +18,7 @@ public:
     Button(Rml::Element* parent, Rml::String text, const Rml::String& tagName = "button")
         : Button(parent, Props{std::move(text)}, tagName) {}
 
+    void update() override;
     void set_text(const Rml::String& text);
     Button& on_pressed(ButtonCallback callback);
 
@@ -25,6 +28,7 @@ private:
     void update_props(Props props);
 
     Props mProps;
+    std::size_t mLocalizationGeneration = static_cast<std::size_t>(-1);
 };
 
 class ControlledButton : public Button {

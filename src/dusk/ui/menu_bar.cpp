@@ -170,6 +170,9 @@ void MenuBar::hide(bool close) {
 
 void MenuBar::update() {
     update_safe_area();
+    if (mTabBar != nullptr) {
+        mTabBar->update();
+    }
     Document::update();
 }
 

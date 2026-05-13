@@ -116,6 +116,9 @@ void Window::hide(bool close) {
 
 void Window::update() {
     update_safe_area();
+    if (mTabBar != nullptr) {
+        mTabBar->update();
+    }
     for (const auto& component : mContentComponents) {
         component->update();
     }

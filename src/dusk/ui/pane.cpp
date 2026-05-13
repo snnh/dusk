@@ -2,6 +2,7 @@
 
 #include "Z2AudioLib/Z2SeMgr.h"
 #include "m_Do/m_Do_audio.h"
+#include "localization.hpp"
 #include "ui.hpp"
 
 namespace dusk::ui {
@@ -166,19 +167,19 @@ bool Pane::focus() {
 Rml::Element* Pane::add_section(const Rml::String& text) {
     auto* elem = append(mRoot, "div");
     elem->SetClass("section-heading", true);
-    elem->SetInnerRML(escape(text));
+    elem->SetInnerRML(escape(localization::translate(text)));
     return elem;
 }
 
 Rml::Element* Pane::add_text(const Rml::String& text) {
     auto* elem = append(mRoot, "div");
-    elem->SetInnerRML(escape(text));
+    elem->SetInnerRML(escape(localization::translate(text)));
     return elem;
 }
 
 Rml::Element* Pane::add_rml(const Rml::String& rml) {
     auto* elem = append(mRoot, "div");
-    elem->SetInnerRML(rml);
+    elem->SetInnerRML(localization::translate_rml(rml));
     return elem;
 }
 

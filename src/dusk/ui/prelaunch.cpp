@@ -7,6 +7,7 @@
 #include "dusk/main.h"
 #include "dusk/settings.h"
 #include "dusk/update_check.hpp"
+#include "localization.hpp"
 #include "modal.hpp"
 #include "preset.hpp"
 #include "settings.hpp"
@@ -366,7 +367,7 @@ public:
 
         auto* title = append(header, "div");
         title->SetClass("modal-title", true);
-        title->SetInnerRML("Verifying disc image");
+        title->SetInnerRML(escape(localization::translate("Verifying disc image")));
 
         auto* icon = append(header, "icon");
         icon->SetClass("verifying", true);
@@ -471,7 +472,7 @@ private:
                 mProgress->SetAttribute("value", 0.f);
             }
             if (mDetail != nullptr) {
-                mDetail->SetInnerRML("Opening disc image...");
+                mDetail->SetInnerRML(escape(localization::translate("Opening disc image...")));
             }
             return;
         }
@@ -856,22 +857,22 @@ void Prelaunch::update() {
     if (mDiscStatus != nullptr && discStatusLabel != nullptr) {
         if (!activeDiscLoaded) {
             mDiscStatus->RemoveAttribute("status");
-            discStatusLabel->SetInnerRML("No disc image found.");
+            discStatusLabel->SetInnerRML(escape(localization::translate("No disc image found.")));
         } else if (discRestartPending) {
             mDiscStatus->SetAttribute("status", "pending");
-            discStatusLabel->SetInnerRML("Pending restart.");
+            discStatusLabel->SetInnerRML(escape(localization::translate("Pending restart.")));
         } else if (state.configuredDiscValidation == iso::ValidationError::Success) {
             mDiscStatus->SetAttribute("status", "good");
-            discStatusLabel->SetInnerRML("Disc ready.");
+            discStatusLabel->SetInnerRML(escape(localization::translate("Disc ready.")));
         } else if (state.configuredDiscValidation == iso::ValidationError::HashMismatch) {
             mDiscStatus->SetAttribute("status", "mismatch");
-            discStatusLabel->SetInnerRML("Disc hash mismatch.");
+            discStatusLabel->SetInnerRML(escape(localization::translate("Disc hash mismatch.")));
         } else if (canLaunchConfiguredDisc) {
             mDiscStatus->SetAttribute("status", "unknown");
-            discStatusLabel->SetInnerRML("Disc not verified.");
+            discStatusLabel->SetInnerRML(escape(localization::translate("Disc not verified.")));
         } else {
             mDiscStatus->SetAttribute("status", "bad");
-            discStatusLabel->SetInnerRML("Disc unavailable.");
+            discStatusLabel->SetInnerRML(escape(localization::translate("Disc unavailable.")));
         }
     }
     if (mDiscDetail != nullptr) {
@@ -901,7 +902,7 @@ void Prelaunch::update() {
 
         if (sUpdateCheckTask != nullptr) {
             mUpdateStatus->SetAttribute("state", "checking");
-            mUpdateMessage->SetInnerRML("Checking for updates...");
+            mUpdateMessage->SetInnerRML(escape(localization::translate("Checking for updates...")));
         } else if (!sUpdateCheckResult.has_value() ||
                    sUpdateCheckResult->status == update_check::Status::UpToDate)
         {
@@ -909,14 +910,14 @@ void Prelaunch::update() {
             mUpdateMessage->SetInnerRML("");
         } else if (sUpdateCheckResult->status == update_check::Status::UpdateAvailable) {
             mUpdateStatus->SetAttribute("state", "available");
-            mUpdateMessage->SetInnerRML("Update available!");
+            mUpdateMessage->SetInnerRML(escape(localization::translate("Update available!")));
             if (mUpdateDownloadLabel != nullptr) {
                 mUpdateDownloadLabel->SetInnerRML(escape(
                     fmt::format("Download {}", update_release_label(sUpdateCheckResult->latest))));
             }
         } else {
             mUpdateStatus->SetAttribute("state", "failed");
-            mUpdateMessage->SetInnerRML("Failed to check for updates");
+            mUpdateMessage->SetInnerRML(escape(localization::translate("Failed to check for updates")));
         }
     }
 

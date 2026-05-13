@@ -13,6 +13,7 @@
 #include "aurora/lib/window.hpp"
 #include "dusk/io.hpp"
 #include "input.hpp"
+#include "localization.hpp"
 #include "prelaunch.hpp"
 #include "window.hpp"
 
@@ -54,12 +55,16 @@ bool initialize() noexcept {
     load_font("AlegreyaSC-Bold.ttf");
     load_font("MaterialSymbolsRounded-Regular.ttf");
     load_font("NotoMono-Regular.ttf");
+    load_font("HarmonyOS_Sans_SC_Regular.ttf", true);
+
+    localization::initialize();
 
     sInitialized = true;
     return true;
 }
 
 void shutdown() noexcept {
+    localization::shutdown();
     sDocumentStack.clear();
     sPassiveDocuments.clear();
     sConnectedGamepads.clear();

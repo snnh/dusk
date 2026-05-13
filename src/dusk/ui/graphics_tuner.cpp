@@ -9,6 +9,7 @@
 
 #include "dusk/config.hpp"
 #include "dusk/settings.h"
+#include "localization.hpp"
 
 #include <algorithm>
 #include <string>
@@ -201,10 +202,10 @@ GraphicsTuner::GraphicsTuner(GraphicsTunerProps props, bool prelaunch)
     }
 
     if (auto* title = mDocument->GetElementById("title")) {
-        title->SetInnerRML(escape(props.title));
+        title->SetInnerRML(escape(localization::translate(props.title)));
     }
     if (auto* description = mDocument->GetElementById("description")) {
-        description->SetInnerRML(escape(props.helpText));
+        description->SetInnerRML(escape(localization::translate(props.helpText)));
     }
     if (auto* carouselParent = mDocument->GetElementById("carousel-container")) {
         mCarousel = &add_component<SteppedCarousel>(carouselParent,

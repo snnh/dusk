@@ -1,5 +1,6 @@
 #include "select_button.hpp"
 
+#include "localization.hpp"
 #include "ui.hpp"
 
 #include <fmt/format.h>
@@ -29,26 +30,37 @@ bool SelectButton::modified() const {
     return mProps.modified;
 }
 
+void SelectButton::update() {
+    update_props(mProps);
+    Component::update();
+}
+
 void SelectButton::set_modified(bool value) {
-    if (mProps.modified != value) {
+    const auto generation = localization::generation();
+    if (mProps.modified != value || mValueLocalizationGeneration != generation) {
         mValueElem->SetClass("modified", value);
+        const auto translatedValue = localization::translate(mProps.value);
         if (value) {
-            mValueElem->SetInnerRML(fmt::format("•&nbsp;{}", escape(mProps.value)));
+            mValueElem->SetInnerRML(fmt::format("•&nbsp;{}", escape(translatedValue)));
         } else {
-            mValueElem->SetInnerRML(escape(mProps.value));
+            mValueElem->SetInnerRML(escape(translatedValue));
         }
         mProps.modified = value;
+        mValueLocalizationGeneration = generation;
     }
 }
 
 void SelectButton::set_value_label(const Rml::String& value) {
-    if (mProps.value != value) {
+    const auto generation = localization::generation();
+    if (mProps.value != value || mValueLocalizationGeneration != generation) {
+        const auto translatedValue = localization::translate(value);
         if (mProps.modified) {
-            mValueElem->SetInnerRML(fmt::format("•&nbsp;{}", escape(value)));
+            mValueElem->SetInnerRML(fmt::format("•&nbsp;{}", escape(translatedValue)));
         } else {
-            mValueElem->SetInnerRML(escape(value));
+            mValueElem->SetInnerRML(escape(translatedValue));
         }
         mProps.value = value;
+        mValueLocalizationGeneration = generation;
     }
 }
 
@@ -66,8 +78,10 @@ SelectButton& SelectButton::on_pressed(SelectButtonCallback callback) {
 }
 
 void SelectButton::update_props(Props props) {
-    if (mProps.key != props.key) {
-        mKeyElem->SetInnerRML(escape(props.key));
+    const auto generation = localization::generation();
+    if (mProps.key != props.key || mKeyLocalizationGeneration != generation) {
+        mKeyElem->SetInnerRML(escape(localization::translate(props.key)));
+        mKeyLocalizationGeneration = generation;
     }
     if (mProps.icon != props.icon) {
         Rml::StringList iconClasses;
@@ -93,6 +107,7 @@ bool SelectButton::handle_nav_command(NavCommand cmd) {
 }
 
 void BaseControlledSelectButton::update() {
+    update_props(mProps);
     set_disabled(disabled());
     set_value_label(format_value());
     set_modified(modified());

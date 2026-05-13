@@ -1,5 +1,6 @@
 #include "button.hpp"
 
+#include "localization.hpp"
 #include "ui.hpp"
 
 #include "Z2AudioLib/Z2SeMgr.h"
@@ -24,10 +25,17 @@ Button::Button(Rml::Element* parent, Props props, const Rml::String& tagName)
 }
 
 void Button::set_text(const Rml::String& text) {
-    if (mProps.text != text) {
-        mRoot->SetInnerRML(escape(text));
+    const auto generation = localization::generation();
+    if (mProps.text != text || mLocalizationGeneration != generation) {
+        mRoot->SetInnerRML(escape(localization::translate(text)));
         mProps.text = text;
+        mLocalizationGeneration = generation;
     }
+}
+
+void Button::update() {
+    set_text(mProps.text);
+    Component::update();
 }
 
 Button& Button::on_pressed(ButtonCallback callback) {

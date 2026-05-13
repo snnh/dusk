@@ -7,6 +7,7 @@
 #include "dusk/livesplit.h"
 #include "dusk/speedrun.h"
 #include "fmt/format.h"
+#include "localization.hpp"
 #include "magic_enum.hpp"
 #include "window.hpp"
 
@@ -67,10 +68,10 @@ Rml::Element* create_toast(Rml::Element* parent, const Toast& toast) {
     {
         auto* heading = append(elem, "heading");
         if (toast.title.starts_with("<")) {
-            heading->SetInnerRML(toast.title);
+            heading->SetInnerRML(localization::translate_rml(toast.title));
         } else {
             auto* span = append(heading, "span");
-            span->SetInnerRML(toast.title);
+            span->SetInnerRML(escape(localization::translate(toast.title)));
         }
         if (toast.type == "achievement") {
             auto* icon = append(heading, "icon");
@@ -84,10 +85,10 @@ Rml::Element* create_toast(Rml::Element* parent, const Toast& toast) {
     {
         auto* message = append(elem, "message");
         if (toast.content.starts_with("<")) {
-            message->SetInnerRML(toast.content);
+            message->SetInnerRML(localization::translate_rml(toast.content));
         } else {
             auto* span = append(message, "span");
-            span->SetInnerRML(toast.content);
+            span->SetInnerRML(escape(localization::translate(toast.content)));
         }
     }
     {
@@ -103,13 +104,13 @@ Rml::Element* create_controller_warning(Rml::Element* parent) {
 
     auto* heading = append(elem, "heading");
     auto* title = append(heading, "span");
-    title->SetInnerRML("No controller assigned");
+    title->SetInnerRML(escape(localization::translate("No controller assigned")));
     auto* icon = append(heading, "icon");
     icon->SetClass("warning", true);
 
     auto* message = append(elem, "message");
     auto* content = append(message, "span");
-    content->SetInnerRML("Configure controller port 1 in Settings.");
+    content->SetInnerRML(escape(localization::translate("Configure controller port 1 in Settings.")));
 
     return elem;
 }
@@ -166,11 +167,11 @@ Rml::Element* create_menu_notification(Rml::Element* parent) {
 
     auto* message = append(elem, "message");
     auto* row = append(message, "row");
-    append(row, "span")->SetInnerRML(kMenuNotificationPrefix);
+    append(row, "span")->SetInnerRML(escape(localization::translate(kMenuNotificationPrefix)));
     auto* icon = append(row, "icon");
     icon->SetClass("controller", true);
     append(row, "span")->SetInnerRML(escape(padButton));
-    append(row, "span")->SetInnerRML("to open menu");
+    append(row, "span")->SetInnerRML(escape(localization::translate("to open menu")));
 
     return elem;
 }
