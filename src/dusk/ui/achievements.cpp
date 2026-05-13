@@ -3,9 +3,11 @@
 #include "Z2AudioLib/Z2SeMgr.h"
 #include "dusk/achievements.h"
 #include "fmt/format.h"
+#include "localization.hpp"
 #include "m_Do/m_Do_audio.h"
 #include "nav_types.hpp"
 #include "pane.hpp"
+#include "ui.hpp"
 
 namespace dusk::ui {
 namespace {
@@ -24,6 +26,9 @@ constexpr CategoryInfo kCategories[] = {
 };
 
 Rml::String build_achievement_info_rml(const Achievement& a) {
+    const auto name = localization::translate_text_rml(a.name);
+    const auto description = localization::translate_text_rml(a.description);
+    const auto badge = localization::translate_text_rml(a.unlocked ? "Unlocked" : "Locked");
     Rml::String s = fmt::format(
         R"(<div class="achievement-header">)"
         R"(<span class="achievement-name{}">{}</span>)"
@@ -31,10 +36,10 @@ Rml::String build_achievement_info_rml(const Achievement& a) {
         R"(</div>)"
         R"(<p class="achievement-desc">{}</p>)",
         a.unlocked ? " unlocked" : "",
-        a.name,
+        name,
         a.unlocked ? " unlocked" : " locked",
-        a.unlocked ? "Unlocked" : "Locked",
-        a.description
+        badge,
+        description
     );
 
     if (a.isCounter) {
@@ -146,7 +151,8 @@ AchievementsWindow::AchievementsWindow() {
 
             auto& pane = add_child<Pane>(content, Pane::Type::Controlled);
 
-            pane.add_section(fmt::format("{} / {} unlocked", unlocked, total));
+            pane.add_section(fmt::format("{} / {} {}", unlocked, total,
+                localization::translate("unlocked")));
 
             for (const auto& a : achievements) {
                 if (a.category != cat) {
