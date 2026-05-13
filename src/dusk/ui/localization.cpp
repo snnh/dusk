@@ -208,6 +208,21 @@ Rml::String translate(const Rml::String& text) {
     return translate_token_or_text(text);
 }
 
+Rml::String translate_text_rml(const Rml::String& text) {
+    auto rml = escape(translate(text));
+    std::size_t pos = 0;
+    while ((pos = rml.find("&lt;br/&gt;", pos)) != Rml::String::npos) {
+        rml.replace(pos, std::string_view{"&lt;br/&gt;"}.size(), "<br/>");
+        pos += std::string_view{"<br/>"}.size();
+    }
+    pos = 0;
+    while ((pos = rml.find("&lt;br /&gt;", pos)) != Rml::String::npos) {
+        rml.replace(pos, std::string_view{"&lt;br /&gt;"}.size(), "<br/>");
+        pos += std::string_view{"<br/>"}.size();
+    }
+    return rml;
+}
+
 Rml::String translate_rml(const Rml::String& rml) {
     const auto fullTranslation = translate(rml);
     if (fullTranslation != rml) {

@@ -202,10 +202,10 @@ GraphicsTuner::GraphicsTuner(GraphicsTunerProps props, bool prelaunch)
     }
 
     if (auto* title = mDocument->GetElementById("title")) {
-        title->SetInnerRML(escape(localization::translate(props.title)));
+        title->SetInnerRML(localization::translate_text_rml(props.title));
     }
     if (auto* description = mDocument->GetElementById("description")) {
-        description->SetInnerRML(escape(localization::translate(props.helpText)));
+        description->SetInnerRML(localization::translate_text_rml(props.helpText));
     }
     if (auto* carouselParent = mDocument->GetElementById("carousel-container")) {
         mCarousel = &add_component<SteppedCarousel>(carouselParent,

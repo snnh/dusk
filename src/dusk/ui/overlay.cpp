@@ -104,13 +104,14 @@ Rml::Element* create_controller_warning(Rml::Element* parent) {
 
     auto* heading = append(elem, "heading");
     auto* title = append(heading, "span");
-    title->SetInnerRML(escape(localization::translate("No controller assigned")));
+    title->SetInnerRML(localization::translate_text_rml("No controller assigned"));
     auto* icon = append(heading, "icon");
     icon->SetClass("warning", true);
 
     auto* message = append(elem, "message");
     auto* content = append(message, "span");
-    content->SetInnerRML(escape(localization::translate("Configure controller port 1 in Settings.")));
+    content->SetInnerRML(
+        localization::translate_text_rml("Configure controller port 1 in Settings."));
 
     return elem;
 }

@@ -340,7 +340,7 @@ void apply_disc_verification_result(const DiscVerificationResult& result) {
         state.pendingDiscPath = result.path;
         state.pendingDiscInfo = result.info;
         state.pendingDiscValidation = result.validation;
-        state.errorString = escape(get_error_msg(result.validation));
+        state.errorString = get_error_msg(result.validation);
         return;
     }
 
@@ -356,7 +356,7 @@ void apply_disc_verification_result(const DiscVerificationResult& result) {
     state.pendingDiscPath.clear();
     state.pendingDiscInfo = {};
     state.pendingDiscValidation = iso::ValidationError::Unknown;
-    state.errorString = escape(get_error_msg(result.validation));
+    state.errorString = get_error_msg(result.validation);
 }
 
 class DiscVerificationModal : public WindowSmall {
@@ -579,7 +579,8 @@ void try_push_verification_modal(Document& host) {
 
     if (!state.pendingDiscPath.empty()) {
         const Rml::String bodyRml =
-            state.errorString + "<br/><br/>You may proceed at your own risk.";
+            localization::translate(state.errorString) + "<br/><br/>" +
+            localization::translate("You may proceed at your own risk.");
         auto acceptHashMismatch = [](Modal& modal) {
             auto& st = prelaunch_state();
             std::string path = std::move(st.pendingDiscPath);
@@ -616,7 +617,7 @@ void try_push_verification_modal(Document& host) {
 
     host.push(std::make_unique<Modal>(Modal::Props{
         .title = "Disc verification error",
-        .bodyRml = state.errorString,
+        .bodyRml = localization::translate(state.errorString),
         .actions =
             {
                 ModalAction{

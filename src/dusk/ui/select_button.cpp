@@ -39,11 +39,11 @@ void SelectButton::set_modified(bool value) {
     const auto generation = localization::generation();
     if (mProps.modified != value || mValueLocalizationGeneration != generation) {
         mValueElem->SetClass("modified", value);
-        const auto translatedValue = localization::translate(mProps.value);
+        const auto translatedValue = localization::translate_text_rml(mProps.value);
         if (value) {
-            mValueElem->SetInnerRML(fmt::format("•&nbsp;{}", escape(translatedValue)));
+            mValueElem->SetInnerRML(fmt::format("•&nbsp;{}", translatedValue));
         } else {
-            mValueElem->SetInnerRML(escape(translatedValue));
+            mValueElem->SetInnerRML(translatedValue);
         }
         mProps.modified = value;
         mValueLocalizationGeneration = generation;
@@ -53,11 +53,11 @@ void SelectButton::set_modified(bool value) {
 void SelectButton::set_value_label(const Rml::String& value) {
     const auto generation = localization::generation();
     if (mProps.value != value || mValueLocalizationGeneration != generation) {
-        const auto translatedValue = localization::translate(value);
+        const auto translatedValue = localization::translate_text_rml(value);
         if (mProps.modified) {
-            mValueElem->SetInnerRML(fmt::format("•&nbsp;{}", escape(translatedValue)));
+            mValueElem->SetInnerRML(fmt::format("•&nbsp;{}", translatedValue));
         } else {
-            mValueElem->SetInnerRML(escape(translatedValue));
+            mValueElem->SetInnerRML(translatedValue);
         }
         mProps.value = value;
         mValueLocalizationGeneration = generation;
@@ -80,7 +80,7 @@ SelectButton& SelectButton::on_pressed(SelectButtonCallback callback) {
 void SelectButton::update_props(Props props) {
     const auto generation = localization::generation();
     if (mProps.key != props.key || mKeyLocalizationGeneration != generation) {
-        mKeyElem->SetInnerRML(escape(localization::translate(props.key)));
+        mKeyElem->SetInnerRML(localization::translate_text_rml(props.key));
         mKeyLocalizationGeneration = generation;
     }
     if (mProps.icon != props.icon) {

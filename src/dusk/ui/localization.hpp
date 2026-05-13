@@ -18,6 +18,7 @@ struct Language {
 std::span<const Language> available_languages() noexcept;
 std::size_t generation() noexcept;
 Rml::String translate(const Rml::String& text);
+Rml::String translate_text_rml(const Rml::String& text);
 Rml::String translate_rml(const Rml::String& rml);
 
 }  // namespace dusk::ui::localization

@@ -172,6 +172,17 @@
   <string key="Disc verification warning">光盘校验警告</string>
   <string key="Disc verification error">光盘校验错误</string>
   <string key="Continue anyway">仍要继续</string>
+  <string key="The selected disc image could not be validated.">无法验证所选光盘镜像。</string>
+  <string key="Unable to read the selected file.">无法读取所选文件。</string>
+  <string key="The selected file is not a valid disc image.">所选文件不是有效的光盘镜像。</string>
+  <string key="The selected game is not supported by Dusklight.">Dusklight 不支持所选游戏。</string>
+  <string key="Dusklight currently supports GameCube USA and PAL disc images only.">Dusklight 目前仅支持<br/>GameCube 美版和 PAL 版光盘镜像。</string>
+  <string key="Disc verification was canceled. Dusklight cannot guarantee the selected disc image is compatible.">光盘校验已取消。<br/>Dusklight 无法保证<br/>所选光盘镜像兼容。</string>
+  <string key="The selected disc image did not pass hash verification. It may be corrupt or modified.">所选光盘镜像未通过哈希校验。<br/>它可能已损坏或被修改。</string>
+  <string key="The selected disc image is valid.">所选光盘镜像有效。</string>
+  <string key="You may proceed at your own risk.">你可以继续，但风险自负。</string>
+  <string key="No controller assigned">未分配输入设备</string>
+  <string key="Configure controller port 1 in Settings.">请在设置中配置输入端口 1。</string>
   <string key="Apply Options">应用选项</string>
   <string key="Restart later">稍后重启</string>
   <string key="Restart now">立即重启</string>
@@ -197,7 +208,7 @@
 
   <string key="Save File Type">存档文件类型</string>
   <string key="Set the disc image that Dusklight uses to launch the game.&lt;br/&gt;&lt;br/&gt;Changes require a restart.">设置 Dusklight 启动游戏时使用的光盘镜像。<br/><br/>更改将在重启后生效。</string>
-  <string key="The data folder is where Dusklight stores settings, saves, logs, texture replacements, and other app data.">数据文件夹用于存放 Dusklight 的设置、存档、日志、材质替换和其他应用数据。</string>
+  <string key="The data folder is where Dusklight stores settings, saves, logs, texture replacements, and other app data.">数据文件夹用于存放 Dusklight 的设置、存档、日志、<br/>材质替换和其他应用数据。</string>
   <string key="Data will be migrated automatically on restart.">重启后会自动迁移数据。</string>
   <string key="Current data folder:">当前数据文件夹：</string>
   <string key="&lt;br/&gt;Changes require a restart."><br/>更改将在重启后生效。</string>
@@ -210,33 +221,33 @@
   <string key="Lock the game&apos;s aspect ratio to the original.">将游戏画面宽高比锁定为原始比例。</string>
   <string key="Pause the game when window focus is lost.">窗口失去焦点时暂停游戏。</string>
   <string key="&lt;br/&gt;Display the current framerate in a corner of the screen while playing."><br/>游玩时在画面角落显示当前帧率。</string>
-  <string key="Configure the resolution used for rendering the game. Higher values are more demanding on your graphics hardware.">设置游戏渲染所用的分辨率。数值越高，对显卡性能要求越高。</string>
-  <string key="Configure the shadow-map resolution. Higher values improve shadow quality but increase GPU and memory usage.">设置阴影贴图分辨率。数值越高，阴影质量越好，但会增加 GPU 和显存占用。</string>
-  <string key="Configure the post-processing bloom effect. Classic uses the original bloom pass; Dusklight uses a higher-quality bloom pass.">设置后处理泛光效果。经典使用原版泛光流程；Dusklight 使用质量更高的泛光流程。</string>
-  <string key="Configure bloom intensity. Higher values make bright areas glow more strongly.">设置泛光强度。数值越高，明亮区域的光晕越强。</string>
+  <string key="Configure the resolution used for rendering the game. Higher values are more demanding on your graphics hardware.">设置游戏渲染所用的分辨率。<br/>数值越高，对显卡性能要求越高。</string>
+  <string key="Configure the shadow-map resolution. Higher values improve shadow quality but increase GPU and memory usage.">设置阴影贴图分辨率。<br/>数值越高，阴影质量越好，<br/>但会增加 GPU 和显存占用。</string>
+  <string key="Configure the post-processing bloom effect. Classic uses the original bloom pass; Dusklight uses a higher-quality bloom pass.">设置后处理泛光效果。<br/>经典使用原版泛光流程；<br/>Dusklight 使用质量更高的泛光流程。</string>
+  <string key="Configure bloom intensity. Higher values make bright areas glow more strongly.">设置泛光强度。<br/>数值越高，明亮区域的光晕越强。</string>
   <string key="Uses inter-frame interpolation to enable higher frame rates.&lt;br/&gt;&lt;br/&gt;May introduce minor visual artifacts or animation glitches.">通过帧间插值实现更高帧率。<br/><br/>可能带来轻微画面瑕疵或动画异常。</string>
   <string key="Enable Depth of Field">启用景深</string>
   <string key="Enable Mini-Map Shadows">启用小地图阴影</string>
 
   <string key="Open controller binding configuration.">打开输入绑定配置。</string>
-  <string key="Allow controller input even when the game window is not focused.">即使游戏窗口不在前台，也允许接收输入设备信号。</string>
-  <string key="Enables twin-stick camera control, letting the C-Stick move the camera vertically as well as horizontally.">启用双摇杆镜头控制，让 C 摇杆同时控制镜头的水平和垂直移动。</string>
+  <string key="Allow controller input even when the game window is not focused.">即使游戏窗口不在前台，<br/>也允许接收输入设备信号。</string>
+  <string key="Enables twin-stick camera control, letting the C-Stick move the camera vertically as well as horizontally.">启用双摇杆镜头控制，让 C 摇杆同时控制<br/>镜头的水平和垂直移动。</string>
   <string key="Invert horizontal camera movement.">反转镜头水平移动。</string>
   <string key="Invert vertical camera movement when Free Camera is enabled.">启用自由镜头时反转镜头垂直移动。</string>
   <string key="Adjusts twin-stick camera sensitivity.">调整双摇杆镜头灵敏度。</string>
   <string key="Invert First Person X Axis">反转第一人称 X 轴</string>
   <string key="Invert First Person Y Axis">反转第一人称 Y 轴</string>
-  <string key="Invert horizontal movement while aiming with items or first person camera. Applies only to the control stick (the gyroscope can be inverted in Input settings).">反转使用道具瞄准或第一人称镜头时的水平移动。仅作用于摇杆输入；陀螺仪可在输入设置中单独反转。</string>
-  <string key="Invert vertical movement while aiming with items or first person camera. Applies only to the control stick (the gyroscope can be inverted in Input settings).">反转使用道具瞄准或第一人称镜头时的垂直移动。仅作用于摇杆输入；陀螺仪可在输入设置中单独反转。</string>
+  <string key="Invert horizontal movement while aiming with items or first person camera. Applies only to the control stick (the gyroscope can be inverted in Input settings).">使用道具瞄准或第一人称镜头时，<br/>反转水平移动。<br/>仅作用于摇杆输入；<br/>陀螺仪可在输入设置中单独反转。</string>
+  <string key="Invert vertical movement while aiming with items or first person camera. Applies only to the control stick (the gyroscope can be inverted in Input settings).">使用道具瞄准或第一人称镜头时，<br/>反转垂直移动。<br/>仅作用于摇杆输入；<br/>陀螺仪可在输入设置中单独反转。</string>
   <string key="Gyro Input Method">陀螺仪输入方式</string>
   <string key="Gyro Aim">陀螺仪瞄准</string>
   <string key="Gyro Rollgoal">滚珠陀螺仪</string>
   <string key="Gyro Pitch Sensitivity">陀螺仪俯仰灵敏度</string>
   <string key="Gyro Yaw Sensitivity">陀螺仪偏航灵敏度</string>
   <string key="Rollgoal Sensitivity">滚珠灵敏度</string>
-  <string key="&lt;br/&gt;&lt;b&gt;Sensor&lt;/b&gt; reads motion directly from a supported controller&apos;s gyro via SDL.&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Mouse&lt;/b&gt; treats mouse input as gyro, intended for use with the Steam Deck.&lt;br/&gt;&lt;br/&gt;Mouse input cannot currently be used with Gyro Rollgoal."><br/><b>传感器</b>会通过 SDL 直接读取受支持输入设备的陀螺仪动作。<br/><br/><b>鼠标</b>会将鼠标输入视为陀螺仪输入，主要用于 Steam Deck。<br/><br/>鼠标输入目前不能用于滚珠陀螺仪。</string>
-  <string key="Enables gyro controls while in look mode, aiming a hawk, and aiming supported items.&lt;br/&gt;&lt;br/&gt;Supported items include the Slingshot, Gale Boomerang, Hero&apos;s Bow, Clawshot(s), Ball and Chain, and Dominion Rod.">在观察模式、鹰瞄准以及使用支持的道具瞄准时启用陀螺仪控制。<br/><br/>支持的道具包括弹弓、疾风回旋镖、勇者之弓、爪钩、链球和支配权杖。</string>
-  <string key="Enables gyro controls for Rollgoal in Hena&apos;s Cabin.">在赫娜的小屋玩滚珠游戏时启用陀螺仪控制。</string>
+  <string key="&lt;br/&gt;&lt;b&gt;Sensor&lt;/b&gt; reads motion directly from a supported controller&apos;s gyro via SDL.&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Mouse&lt;/b&gt; treats mouse input as gyro, intended for use with the Steam Deck.&lt;br/&gt;&lt;br/&gt;Mouse input cannot currently be used with Gyro Rollgoal."><br/><b>传感器</b>会通过 SDL<br/>直接读取受支持输入设备的<br/>陀螺仪动作。<br/><br/><b>鼠标</b>会将鼠标输入<br/>视为陀螺仪输入，<br/>主要用于 Steam Deck。<br/><br/>鼠标输入目前不能用于滚珠陀螺仪。</string>
+  <string key="Enables gyro controls while in look mode, aiming a hawk, and aiming supported items.&lt;br/&gt;&lt;br/&gt;Supported items include the Slingshot, Gale Boomerang, Hero&apos;s Bow, Clawshot(s), Ball and Chain, and Dominion Rod.">在观察模式、鹰瞄准<br/>以及使用支持的道具瞄准时，<br/>启用陀螺仪控制。<br/><br/>支持的道具包括弹弓、<br/>疾风回旋镖、勇者之弓、<br/>爪钩、链球和支配权杖。</string>
+  <string key="Enables gyro controls for Rollgoal in Hena&apos;s Cabin.">在赫娜的小屋玩滚珠游戏时<br/>启用陀螺仪控制。</string>
   <string key="Controls vertical gyro aiming sensitivity.">控制陀螺仪垂直瞄准灵敏度。</string>
   <string key="Controls horizontal gyro aiming sensitivity.">控制陀螺仪水平瞄准灵敏度。</string>
   <string key="Controls how strongly gyro input tilts the Rollgoal table.">控制陀螺仪输入倾斜滚珠台面的强度。</string>
@@ -262,20 +273,20 @@
   <string key="Any hit will instantly kill you.">受到任意伤害都会立即死亡。</string>
   <string key="Hearts will never drop from enemies, pots, and various other places.">敌人、罐子和其他来源都不会掉落心心。</string>
   <string key="Wallet sizes are like in the HD version. (500, 1000, 2000)">钱包容量改为 HD 版数值。（500、1000、2000）</string>
-  <string key="Rupees will not play cutscenes after you have collected them the first time.">首次获得某种卢比后，再次获得时不再播放过场。</string>
+  <string key="Rupees will not play cutscenes after you have collected them the first time.">首次获得某种卢比后，<br/>再次获得时不再播放过场。</string>
   <string key="Quicker climbing on ladders and vines like the HD version.">像 HD 版一样加快梯子和藤蔓攀爬速度。</string>
   <string key="Tears of Light dropped by Shadow Insects pop out faster like the HD version.">影虫掉落的光之泪会像 HD 版一样更快弹出。</string>
-  <string key="Autosaves the game when going to a new area, opening a dungeon door, or getting a new item.">进入新区域、打开迷宫门或获得新道具时自动保存。</string>
+  <string key="Autosaves the game when going to a new area, opening a dungeon door, or getting a new item.">进入新区域、打开迷宫门<br/>或获得新道具时自动保存。</string>
   <string key="Skips the delay when writing to the Memory Card.">跳过写入记忆卡时的等待。</string>
   <string key="Makes text scroll immediately by holding B.">按住 B 可让文本立即滚动显示。</string>
-  <string key="Prevents Link from playing a struggle animation when grabbing ledges or climbing on vines.">林克抓住边缘或攀爬藤蔓时不再播放挣扎动画。</string>
+  <string key="Prevents Link from playing a struggle animation when grabbing ledges or climbing on vines.">林克抓住边缘或攀爬藤蔓时<br/>不再播放挣扎动画。</string>
   <string key="Always collect Rupees even if your Wallet is too full.">即使钱包已满，也会继续收取卢比。</string>
   <string key="Link will not recoil when his sword hits walls.">剑击中墙面时林克不会被弹开。</string>
   <string key="Skip needing to catch a second fish for Sera&apos;s cat.">省略为塞拉的猫再抓第二条鱼的要求。</string>
   <string key="Allows Wolf Link to howl and change the time of day.">允许狼林克嚎叫来改变昼夜时间。</string>
   <string key="Transform instantly by pressing R and Y simultaneously.">同时按下 R 和 Y 可立即变身。</string>
   <string key="Enables speedrunning options while restricting certain gameplay modifiers.">启用竞速选项，同时限制部分玩法修改项。</string>
-  <string key="Connect to LiveSplit server on localhost:16834. For this to work you must right click LiveSplit, and turn on Control -&gt; Start TCP Server. To see IGT in LiveSplit you must change your comparison to Game Time.">连接到 localhost:16834 上的 LiveSplit 服务器。要使用此功能，需要右键点击 LiveSplit，并启用 Control -&gt; Start TCP Server。若要在 LiveSplit 中显示 IGT，需要将比较基准切换为 Game Time。</string>
+  <string key="Connect to LiveSplit server on localhost:16834. For this to work you must right click LiveSplit, and turn on Control -&gt; Start TCP Server. To see IGT in LiveSplit you must change your comparison to Game Time.">连接到 localhost:16834 上的<br/>LiveSplit 服务器。<br/>要使用此功能，<br/>需要右键点击 LiveSplit，<br/>并启用 Control -&gt; Start TCP Server。<br/>若要在 LiveSplit 中显示 IGT，<br/>需要将比较基准切换为 Game Time。</string>
   <string key="Display the RTA timer. IGT is always visible.">显示 RTA 计时器。IGT 会始终显示。</string>
 
   <string key="Keeps your health full.">保持生命值全满。</string>
@@ -296,14 +307,14 @@
 
   <string key="Crash Reporting">崩溃报告</string>
   <string key="Enable Discord Rich Presence">启用 Discord Rich Presence</string>
-  <string key="Open the folder where Dusklight stores settings, saves, logs, texture replacements, and other app data.">打开 Dusklight 存放设置、存档、日志、材质替换和其他应用数据的文件夹。</string>
+  <string key="Open the folder where Dusklight stores settings, saves, logs, texture replacements, and other app data.">打开 Dusklight 存放设置、存档、日志、材质替换<br/>和其他应用数据的文件夹。</string>
   <string key="&lt;br/&gt;Choose which notifications can be displayed."><br/>选择可以显示的通知类型。</string>
-  <string key="Dusklight can automatically send crash reports to the developers. Crash reports contain the following:&lt;br/&gt;• Operating system version&lt;br/&gt;• CPU architecture&lt;br/&gt;• GPU model &amp; driver version&lt;br/&gt;• File paths (may include account username)&lt;br/&gt;• Stack trace">Dusklight 可以自动向开发者发送崩溃报告。崩溃报告包含以下内容：<br/>• 操作系统版本<br/>• CPU 架构<br/>• GPU 型号和驱动版本<br/>• 文件路径（可能包含账号用户名）<br/>• 堆栈跟踪</string>
-  <string key="When starting Dusklight, skip the main menu and boot straight into the game if a disc image is available.">启动 Dusklight 时，如果已有可用的光盘镜像，则跳过主菜单并直接进入游戏。</string>
+  <string key="Dusklight can automatically send crash reports to the developers. Crash reports contain the following:&lt;br/&gt;• Operating system version&lt;br/&gt;• CPU architecture&lt;br/&gt;• GPU model &amp; driver version&lt;br/&gt;• File paths (may include account username)&lt;br/&gt;• Stack trace">Dusklight 可以自动向开发者<br/>发送崩溃报告。<br/>崩溃报告包含以下内容：<br/>• 操作系统版本<br/>• CPU 架构<br/>• GPU 型号和驱动版本<br/>• 文件路径（可能包含账号用户名）<br/>• 堆栈跟踪</string>
+  <string key="When starting Dusklight, skip the main menu and boot straight into the game if a disc image is available.">启动 Dusklight 时，<br/>如果已有可用的光盘镜像，<br/>则跳过主菜单并直接进入游戏。</string>
   <string key="Show an overlay when shaders are being compiled for your hardware.">为当前硬件编译着色器时显示覆盖提示。</string>
   <string key="Checks GitHub releases for a new Dusklight version on startup.&lt;br/&gt;&lt;br/&gt;No personal information is transmitted or collected.">启动时检查 GitHub Releases 中是否有新版 Dusklight。<br/><br/>不会传输或收集个人信息。</string>
-  <string key="Enable Dusk to integrate with Discord Rich Presence. This allows Discord to show your status in-game.">允许 Dusk 集成 Discord Rich Presence，让 Discord 显示你的游戏内状态。</string>
-  <string key="Show advanced settings and debugging tools with Shift+F1.&lt;br/&gt;&lt;br/&gt;&lt;icon class=&quot;warning&quot;/&gt; WARNING: Debugging tools can easily break your game. Do not use on a regular save!">使用 Shift+F1 显示高级设置和调试工具。<br/><br/><icon class="warning"/> 警告：调试工具很容易破坏游戏流程。不要在正常存档中使用！</string>
+  <string key="Enable Dusk to integrate with Discord Rich Presence. This allows Discord to show your status in-game.">允许 Dusk 集成 Discord Rich Presence，<br/>让 Discord 显示你的游戏内状态。</string>
+  <string key="Show advanced settings and debugging tools with Shift+F1.&lt;br/&gt;&lt;br/&gt;&lt;icon class=&quot;warning&quot;/&gt; WARNING: Debugging tools can easily break your game. Do not use on a regular save!">使用 Shift+F1 显示高级设置<br/>和调试工具。<br/><br/><icon class="warning"/> 警告：调试工具很容易破坏游戏流程。<br/>不要在正常存档中使用！</string>
   <string key="Display a controller input overlay while playing.">游玩时显示输入状态覆盖层。</string>
   <string key="Show gyro sensor values in the input viewer.">在输入监视器中显示陀螺仪传感器数值。</string>
   <string key="Skips the TV calibration screen shown when loading a save.">读取存档时跳过电视校准画面。</string>
@@ -342,7 +353,7 @@
   <string key="Start">开始</string>
   <string key="Low Rumble Frequency">低频震动强度</string>
   <string key="High Rumble Frequency">高频震动强度</string>
-  <string key="Configure your desired rumble intensities, then run a test to check how they feel.">配置所需的震动强度，然后运行测试确认手感。</string>
+  <string key="Configure your desired rumble intensities, then run a test to check how they feel.">配置所需的震动强度，<br/>然后运行测试确认手感。</string>
   <string key="Press a button...">请按下按钮...</string>
   <string key="Move axis or press a button...">请移动轴或按下按钮...</string>
   <string key="Press a key or mouse button...">请按下键盘按键或鼠标按钮...</string>
@@ -355,14 +366,14 @@
   <string key="Unknown">未知</string>
   <string key="Left Stick">左摇杆</string>
   <string key="Right Stick">右摇杆</string>
-  <string key="Cross">叉键</string>
-  <string key="Circle">圆圈键</string>
-  <string key="Triangle">三角键</string>
-  <string key="Square">方块键</string>
+  <string key="Cross">X键</string>
+  <string key="Circle">○键</string>
+  <string key="Triangle">△键</string>
+  <string key="Square">□键</string>
   <string key="D-pad left">方向键左</string>
   <string key="D-pad right">方向键右</string>
   <string key="D-pad up">方向键上</string>
   <string key="D-pad down">方向键下</string>
-  <string key="A key bound to any action here will REPLACE the default control for that action. Only bind buttons here that aren&apos;t used anywhere else.">在这里为动作绑定的按键会取代该动作的默认控制。请只绑定未在其他地方使用的按钮。</string>
-  <string key="A button bound to any action here will REPLACE the default control for that action. Only bind buttons here that aren&apos;t used anywhere else. The glyphs shown for in game actions will not change. This is not recommended for regular Gamecube controllers.">在这里为动作绑定的按钮会取代该动作的默认控制。请只绑定未在其他地方使用的按钮。游戏内动作显示的图标不会改变。不建议普通 GameCube 输入设备使用此功能。</string>
+  <string key="A key bound to any action here will REPLACE the default control for that action. Only bind buttons here that aren&apos;t used anywhere else.">在这里为动作绑定的按键<br/>会取代该动作的默认控制。<br/>请只绑定未在其他地方使用的按钮。</string>
+  <string key="A button bound to any action here will REPLACE the default control for that action. Only bind buttons here that aren&apos;t used anywhere else. The glyphs shown for in game actions will not change. This is not recommended for regular Gamecube controllers.">在这里为动作绑定的按钮<br/>会取代该动作的默认控制。<br/>请只绑定未在其他地方使用的按钮。<br/>游戏内动作显示的图标不会改变。<br/>不建议普通 GameCube 输入设备<br/>使用此功能。</string>
 </strings>

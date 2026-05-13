@@ -27,7 +27,7 @@ Button::Button(Rml::Element* parent, Props props, const Rml::String& tagName)
 void Button::set_text(const Rml::String& text) {
     const auto generation = localization::generation();
     if (mProps.text != text || mLocalizationGeneration != generation) {
-        mRoot->SetInnerRML(escape(localization::translate(text)));
+        mRoot->SetInnerRML(localization::translate_text_rml(text));
         mProps.text = text;
         mLocalizationGeneration = generation;
     }
