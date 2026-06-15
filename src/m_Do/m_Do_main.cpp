@@ -475,12 +475,6 @@ u8 OSGetLanguage() {
 }
 
 static void LanguageInit() {
-    // Keep language at 0 (English) if not on a PAL disc and if TPHD is unloaded.
-    // Doubt this matters, but avoid funky shit.
-    if (!dusk::version::isRegionPal() && !dusk::tphd_active()) {
-        return;
-    }
-
     // Cache this to avoid funky shenanigans.
     selectedLanguage = static_cast<u8>(dusk::getSettings().game.language.getValue());
 }

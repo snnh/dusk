@@ -494,6 +494,34 @@ bool register_hd_bti_replacement_for_buffer(const TphdPack& pack, std::string_vi
     return true;
 }
 
+u32 joinedFontTextureHeight(const ResFONT::GLY1& gly) {
+    const u32 pageNumCells = static_cast<u32>(gly.numRows) * static_cast<u32>(gly.numColumns);
+    if (pageNumCells == 0) {
+        return 0;
+    }
+
+    u32 pageCount = 0;
+    for (u32 code = gly.startCode; code < gly.endCode; code += pageNumCells) {
+        ++pageCount;
+    }
+    return static_cast<u32>(gly.textureHeight) * pageCount;
+}
+
+bool isCompatibleFontSurface(const ResFONT::GLY1& gly, const GtxSurface& surface) {
+    const u32 fontWidth = gly.textureWidth;
+    const u32 fontHeight = joinedFontTextureHeight(gly);
+    if (fontWidth == 0 || fontHeight == 0) {
+        return false;
+    }
+    if (surface.width < fontWidth || surface.height < fontHeight) {
+        return false;
+    }
+    if (surface.width % fontWidth != 0 || surface.height % fontHeight != 0) {
+        return false;
+    }
+    return surface.width / fontWidth == surface.height / fontHeight;
+}
+
 size_t register_hd_font_replacements_for_buffer(const TphdPack& pack, std::string_view resourceName,
     void* buffer, size_t resourceSize, bool replaceExistingPointer) {
     if (buffer == nullptr || resourceSize < sizeof(ResFONT) ||
@@ -538,10 +566,17 @@ size_t register_hd_font_replacements_for_buffer(const TphdPack& pack, std::strin
 
             const auto& surface = surfaces[surfaceIdx];
             const auto* mapping = findFormatMapping(surface.format);
-            if (mapping != nullptr && !surface.baseData.empty()) {
+            if (mapping != nullptr && !surface.baseData.empty() &&
+                isCompatibleFontSurface(*gly, surface))
+            {
                 registerHdSurface(*mapping, surface, gly->data, gtx->name, surfaceIdx,
                     replaceExistingPointer);
                 ++registered;
+            } else if (mapping != nullptr && !surface.baseData.empty()) {
+                HdLog.warn("Skipping incompatible HD font surface {}[{}]: font {}x{} joined, "
+                           "surface {}x{}",
+                           gtx->name, surfaceIdx, static_cast<u32>(gly->textureWidth),
+                           joinedFontTextureHeight(*gly), surface.width, surface.height);
             }
         }
 

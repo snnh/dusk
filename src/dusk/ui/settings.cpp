@@ -79,22 +79,6 @@ int ui_language_index(std::string_view languageId) {
     return 0;
 }
 
-constexpr std::array kLanguageNamesUS = {
-    "[AMERICAN_ENGLISH]",
-    "[GERMAN]",
-    "[CANADIAN_FRENCH]",
-    "[LATIN_AMERICAN_SPANISH]",
-    "[ITALIAN]",
-};
-
-constexpr std::array kLanguageNamesEU = {
-    "[BRITISH_ENGLISH]",
-    "[GERMAN]",
-    "[EUROPEAN_FRENCH]",
-    "[EUROPEAN_SPANISH]",
-    "[ITALIAN]",
-};
-
 constexpr std::array kCardFileTypes = {
     "[CARD_IMAGE]",
     "[GCI_FOLDER]",
@@ -679,28 +663,13 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     .key = dusk::tphd_active() ? "[LANGUAGE_HD]" : "[LANGUAGE]",
                     .getValue =
                         [] {
-                            const auto& state = prelaunch_state();
-                            if (!state.configuredDiscCanLaunch) {
-                                return kLanguageNames[0];
-                            }
-
                             const u8 idx = static_cast<u8>(getSettings().game.language.getValue());
-
-                            if (dusk::tphd_active()) {
-                                if (state.configuredDiscInfo.isPal) {
-                                    return kLanguageNamesEU[idx];
-                                } else {
-                                    return kLanguageNamesUS[idx];
-                                }
-                            }
-
                             return kLanguageNames[idx];
                         },
                     .isDisabled =
                         [] {
                             const auto& state = prelaunch_state();
-                            return !state.configuredDiscCanLaunch ||
-                                   (!state.configuredDiscInfo.isPal && !dusk::tphd_active());
+                            return !state.configuredDiscCanLaunch;
                         },
                     .isModified =
                         [] {
@@ -709,20 +678,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                         },
                 }),
                 rightPane, [](Pane& pane) {
-                    auto* languageNames = &kLanguageNames;
-                    auto& state = prelaunch_state();
-
-                    if (dusk::tphd_active()) {
-                        if (state.configuredDiscInfo.isPal) {
-                            languageNames = &kLanguageNamesEU;
-                        } else {
-                            languageNames = &kLanguageNamesUS;
-                        }
-                    }
-
-                    for (int i = 0; i < languageNames->size(); i++) {
+                    for (int i = 0; i < kLanguageNames.size(); i++) {
                         pane.add_button({
-                                            .text = languageNames->data()[i],
+                                            .text = kLanguageNames[i],
                                             .isSelected =
                                                 [i] {
                                                     return getSettings().game.language.getValue() ==
