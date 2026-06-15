@@ -963,7 +963,7 @@
   <entry key="EUROPEAN_FRENCH">欧洲法语</entry>
   <entry key="EUROPEAN_SPANISH">欧洲西班牙语</entry>
   <entry key="TPHD_CONTENT_FOLDER">TPHD内容文件夹</entry>
-  <entry key="SET_THE_DIRECTORY_THAT_DUSK_LOADS_ELIGIBLE_TPHD_CONTENT_FROM">设置Dusk加载可用TPHD内容的目录。</entry>
+  <entry key="SET_THE_DIRECTORY_THAT_DUSK_LOADS_ELIGIBLE_TPHD_CONTENT_FROM">设置Dusk加载可用TPHD内容的目录。(实验性)</entry>
   <entry key="HUD_SCALE">HUD缩放</entry>
   <entry key="SCALES_THE_SIZE_OF_THE_GAMEPLAY_HUD_HEARTS_BUTTONS_MINI_MAP_ETC_DOES_NO">缩放游戏HUD大小（心数、按钮、小地图等）。不影响对话框或菜单。</entry>
   <entry key="BUTTON_FISHING">按键钓鱼</entry>
