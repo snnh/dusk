@@ -6,6 +6,7 @@
 #include "aurora/lib/logging.hpp"
 #include "d/actor/d_a_player.h"
 #include "dusk/endian.h"
+#include "dusk/io.hpp"
 
 static aurora::Module LosLog("dusk::tphd::los");
 
@@ -53,7 +54,7 @@ void load_los_table(const std::filesystem::path& contentPath) {
     const std::filesystem::path losPath = contentPath / "los.bin";
     std::ifstream in(losPath, std::ios::binary);
     if (!in) {
-        LosLog.info("no los.bin at {}", losPath.string());
+        LosLog.info("no los.bin at {}", dusk::io::fs_path_to_string(losPath));
         return;
     }
 
@@ -72,7 +73,8 @@ void load_los_table(const std::filesystem::path& contentPath) {
 
     g_data = std::move(data);
     g_count = count;
-    LosLog.info("loaded los.bin: {} room transforms from {}", count, losPath.string());
+    LosLog.info("loaded los.bin: {} room transforms from {}", count,
+                dusk::io::fs_path_to_string(losPath));
 }
 
 // Mirrors HD FUN_02ababbc:

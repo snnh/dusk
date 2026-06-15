@@ -899,6 +899,37 @@ void ensure_data_directory(const std::filesystem::path& dataPath) {
     }
 }
 
+void ensure_initial_pipeline_cache(const std::filesystem::path& dataPath) {
+    const auto targetPath = dataPath / kPipelineCacheName;
+    std::error_code ec;
+    if (std::filesystem::exists(targetPath, ec)) {
+        return;
+    }
+    if (ec) {
+        Log.warn("Failed to inspect pipeline cache '{}': {}", io::fs_path_to_string(targetPath),
+            ec.message());
+        return;
+    }
+
+    const auto sourcePath = base_path_relative(kInitialPipelineCacheName);
+    const bool sourceExists = std::filesystem::is_regular_file(sourcePath, ec);
+    if (ec) {
+        Log.warn("Failed to inspect initial pipeline cache '{}': {}",
+            io::fs_path_to_string(sourcePath), ec.message());
+        return;
+    }
+    if (!sourceExists) {
+        return;
+    }
+
+    std::filesystem::copy_file(sourcePath, targetPath, std::filesystem::copy_options::skip_existing,
+        ec);
+    if (ec) {
+        Log.warn("Failed to copy initial pipeline cache '{}' to '{}': {}",
+            io::fs_path_to_string(sourcePath), io::fs_path_to_string(targetPath), ec.message());
+    }
+}
+
 }  // namespace
 
 bool open_data_path() {

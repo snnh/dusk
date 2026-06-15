@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -22,6 +23,7 @@
 #include "JSystem/J3DGraphLoader/J3DModelLoader.h"
 #include "JSystem/JKernel/JKRArchive.h"
 #include "JSystem/JKernel/JKRDecomp.h"
+#include "JSystem/JUtility/JUTResFont.h"
 #include "JSystem/JUtility/JUTTexture.h"
 #include "dusk/endian.h"
 #include "dusk/io.hpp"
@@ -128,22 +130,18 @@ struct SDL_IODeleter {
 
 using IOStream = std::unique_ptr<SDL_IOStream, SDL_IODeleter>;
 
-IOStream open_stream(const std::filesystem::path& path) {
-    const auto pathString = io::fs_path_to_string(path);
-    return IOStream{SDL_IOFromFile(pathString.c_str(), "rb")};
-}
+struct OverlayMemoryStream {
+    std::vector<u8> bytes;
+    IOStream stream;
+};
 
 std::optional<size_t> get_file_size(const std::filesystem::path& path) {
-    auto stream = open_stream(path);
-    if (stream == nullptr) {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec) {
         return std::nullopt;
     }
-
-    const Sint64 size = SDL_GetIOSize(stream.get());
-    if (size < 0) {
-        return std::nullopt;
-    }
-    return size;
+    return static_cast<size_t>(size);
 }
 
 // On-disk Yaz0 file header.
@@ -170,27 +168,12 @@ std::optional<std::vector<u8>> tryDecodeYaz0(std::span<const u8> bytes) {
 }
 
 std::optional<std::vector<u8>> read_file(const std::filesystem::path& path) {
-    auto stream = open_stream(path);
-    if (stream == nullptr) {
+    try {
+        return io::FileStream::ReadAllBytes(path);
+    } catch (const std::exception& e) {
+        HdLog.warn("HD file read failed: {} ({})", io::fs_path_to_string(path), e.what());
         return std::nullopt;
     }
-    const Sint64 len = SDL_GetIOSize(stream.get());
-    if (len < 0) {
-        return std::nullopt;
-    }
-    std::vector<u8> buf(len);
-    size_t total = 0;
-    while (total < buf.size()) {
-        const size_t got = SDL_ReadIO(stream.get(), buf.data() + total, buf.size() - total);
-        if (got == 0) {
-            break;
-        }
-        total += got;
-    }
-    if (total != buf.size() || SDL_GetIOStatus(stream.get()) == SDL_IO_STATUS_ERROR) {
-        return std::nullopt;
-    }
-    return buf;
 }
 
 std::optional<TphdPack> load_pack_from_file(const std::filesystem::path& path) {
@@ -511,6 +494,63 @@ bool register_hd_bti_replacement_for_buffer(const TphdPack& pack, std::string_vi
     return true;
 }
 
+size_t register_hd_font_replacements_for_buffer(const TphdPack& pack, std::string_view resourceName,
+    void* buffer, size_t resourceSize, bool replaceExistingPointer) {
+    if (buffer == nullptr || resourceSize < sizeof(ResFONT) ||
+        !endsWithSuffixCI(resourceName, ".bfn")) {
+        return 0;
+    }
+
+    const TmpkEntry* gtx = findGtxBySuffix(pack, resourceName);
+    if (gtx == nullptr) {
+        return 0;
+    }
+
+    auto surfaces = parseGtx(gtx->data);
+    if (surfaces.empty()) {
+        return 0;
+    }
+
+    auto* font = static_cast<ResFONT*>(buffer);
+    if (font->filesize > resourceSize || font->numBlocks == 0) {
+        return 0;
+    }
+
+    size_t registered = 0;
+    auto* block = reinterpret_cast<BlockHeader*>(font->data);
+    auto* const bufferEnd = static_cast<u8*>(buffer) + resourceSize;
+    for (u32 blockIdx = 0; blockIdx < font->numBlocks; ++blockIdx) {
+        if (reinterpret_cast<u8*>(block) + sizeof(BlockHeader) > bufferEnd || block->size == 0) {
+            break;
+        }
+        auto* const nextBlock = reinterpret_cast<BlockHeader*>(
+            reinterpret_cast<u8*>(block) + static_cast<u32>(block->size));
+        if (reinterpret_cast<u8*>(nextBlock) > bufferEnd) {
+            break;
+        }
+
+        if (block->magic == 'GLY1') {
+            auto* gly = reinterpret_cast<ResFONT::GLY1*>(block);
+            const u32 surfaceIdx = static_cast<u32>(registered);
+            if (surfaceIdx >= surfaces.size()) {
+                break;
+            }
+
+            const auto& surface = surfaces[surfaceIdx];
+            const auto* mapping = findFormatMapping(surface.format);
+            if (mapping != nullptr && !surface.baseData.empty()) {
+                registerHdSurface(*mapping, surface, gly->data, gtx->name, surfaceIdx,
+                    replaceExistingPointer);
+                ++registered;
+            }
+        }
+
+        block = nextBlock;
+    }
+
+    return registered;
+}
+
 // Absolute offset of slot `slotIdx`'s BTI header within a BMD's TEX1 block.
 // Returns 0 on failure (the TEX1 table never sits at offset 0, so 0 is a
 // safe sentinel).
@@ -676,14 +716,17 @@ void register_hd_textures_for_arc(std::span<u8> arcBytes, const std::vector<ArcF
     // Phase B: standalone .bti files. Each BTI is its own arc entry; the
     // game loads it via JUTTexture (or similar) which calls GXInitTexObj
     // with `(u8*)resTIMG + imageOffset`. Register that exact pointer.
+    size_t fontReg = 0;
     for (const auto& f : files) {
         if (register_hd_bti_replacement_for_buffer(pack, f.path, arcBytes.data() + f.dataOffset, f.dataSize, false)) {
             ++btiReg;
         }
+        fontReg += register_hd_font_replacements_for_buffer(pack, f.path,
+            arcBytes.data() + f.dataOffset, f.dataSize, false);
     }
 
-    HdLog.info("registerHdTextures[{}]: {} BMD-slot, {} standalone-BTI replacements",
-               arcLabel, bmdReg, btiReg);
+    HdLog.info("registerHdTextures[{}]: {} BMD-slot, {} standalone-BTI, {} font replacements",
+               arcLabel, bmdReg, btiReg, fontReg);
 }
 
 // HD arcs whose Wii-U layouts don't match the GC UI pipeline.
@@ -739,43 +782,52 @@ void* overlay_open(void* userData) {
     auto* entry = static_cast<HdOverlayEntry*>(userData);
     if (entry == nullptr) return nullptr;
 
-    SDL_IOStream* stream = open_stream(entry->arcPath).release();
-    if (stream == nullptr) {
-        HdLog.warn("HD overlay open failed: {} ({})",
-                   entry->arcPath.string(), SDL_GetError());
+    auto bytes = read_file(entry->arcPath);
+    if (!bytes) {
+        HdLog.warn("HD overlay open failed: {}", io::fs_path_to_string(entry->arcPath));
         return nullptr;
     }
 
-    return stream;
+    auto* memoryStream = new OverlayMemoryStream{};
+    memoryStream->bytes = std::move(*bytes);
+    memoryStream->stream = IOStream{
+        SDL_IOFromConstMem(memoryStream->bytes.data(), memoryStream->bytes.size())};
+    if (memoryStream->stream == nullptr) {
+        HdLog.warn("HD overlay memory stream failed: {} ({})",
+                   io::fs_path_to_string(entry->arcPath), SDL_GetError());
+        delete memoryStream;
+        return nullptr;
+    }
+
+    return memoryStream;
 }
 
 void overlay_close(void* handle) {
-    auto* stream = static_cast<SDL_IOStream*>(handle);
-    if (stream == nullptr) return;
-    SDL_CloseIO(stream);
+    auto* stream = static_cast<OverlayMemoryStream*>(handle);
+    delete stream;
 }
 
 int64_t overlay_read(void* handle, uint8_t* buf, size_t len) {
-    auto* stream = static_cast<SDL_IOStream*>(handle);
-    if (stream == nullptr || buf == nullptr) {
+    auto* stream = static_cast<OverlayMemoryStream*>(handle);
+    if (stream == nullptr || stream->stream == nullptr || buf == nullptr) {
         return -1;
     }
     if (len == 0) {
         return 0;
     }
-    const size_t got = SDL_ReadIO(stream, buf, len);
-    if (got == 0 && SDL_GetIOStatus(stream) == SDL_IO_STATUS_ERROR) {
+    const size_t got = SDL_ReadIO(stream->stream.get(), buf, len);
+    if (got == 0 && SDL_GetIOStatus(stream->stream.get()) == SDL_IO_STATUS_ERROR) {
         return -1;
     }
     return static_cast<int64_t>(got);
 }
 
 int64_t overlay_seek(void* handle, int64_t offset, int32_t whence) {
-    auto* stream = static_cast<SDL_IOStream*>(handle);
-    if (stream == nullptr) {
+    auto* stream = static_cast<OverlayMemoryStream*>(handle);
+    if (stream == nullptr || stream->stream == nullptr) {
         return -1;
     }
-    const Sint64 pos = SDL_SeekIO(stream, offset, static_cast<SDL_IOWhence>(whence));
+    const Sint64 pos = SDL_SeekIO(stream->stream.get(), offset, static_cast<SDL_IOWhence>(whence));
     return pos < 0 ? -1 : static_cast<int64_t>(pos);
 }
 
@@ -804,7 +856,8 @@ void rebuild_hd_overlay_locked() {
     std::error_code ec;
     const auto resRoot = g_contentPath;
     if (!std::filesystem::is_directory(resRoot, ec)) {
-        HdLog.warn("HD content path has no res directory: {}", g_contentPath.string());
+        HdLog.warn("HD content path has no res directory: {}",
+                   io::fs_path_to_string(g_contentPath));
         return;
     }
 
@@ -845,7 +898,7 @@ void rebuild_hd_overlay_locked() {
                 if (entryNum >= 0) {
                     g_entryNumToOverlay()[entryNum] = &entry;
                     HdLog.info("HD texture pack registered for vanilla arc: {} -> {}",
-                               entry.dvdPath, entry.packPath.string());
+                               entry.dvdPath, io::fs_path_to_string(entry.packPath));
                 } else {
                     HdLog.warn("HD texture pack skipped because DVD path was not found: {}",
                                entry.dvdPath);
@@ -857,8 +910,7 @@ void rebuild_hd_overlay_locked() {
 
         const auto fileSize = get_file_size(arcPath);
         if (!fileSize.has_value()) {
-            HdLog.warn("HD overlay file size failed: {} ({})",
-                       arcPath.string(), SDL_GetError());
+            HdLog.warn("HD overlay file size failed: {}", io::fs_path_to_string(arcPath));
             continue;
         }
 
@@ -889,7 +941,7 @@ void rebuild_hd_overlay_locked() {
     }
 
     HdLog.info("HD DVD overlay registered {} files (arcs, .jpc and Audiores) from {}",
-               overlayFiles.size(), g_contentPath.string());
+               overlayFiles.size(), io::fs_path_to_string(g_contentPath));
 }
 
 }
@@ -906,7 +958,7 @@ void set_hd_content_path(std::filesystem::path contentPath) {
     rebuild_hd_overlay_locked();
     load_los_table(g_contentPath);
     HdLog.info("HD content path set to: {}",
-               g_contentPath.empty() ? "(disabled)" : g_contentPath.string());
+               g_contentPath.empty() ? "(disabled)" : io::fs_path_to_string(g_contentPath));
 }
 
 std::optional<std::vector<u8>*> try_load_hd_archive(std::string_view gcPath) {
@@ -921,7 +973,7 @@ std::optional<std::vector<u8>*> try_load_hd_archive(std::string_view gcPath) {
     ZoneScoped;
 #ifdef TRACY_ENABLE
     {
-        auto fn = hdArcPath.filename().string();
+        auto fn = io::fs_path_to_string(hdArcPath.filename());
         ZoneText(fn.c_str(), fn.size());
     }
 #endif
@@ -933,7 +985,7 @@ std::optional<std::vector<u8>*> try_load_hd_archive(std::string_view gcPath) {
 
     if (auto inflated = tryDecodeYaz0(*hdBytesOpt)) {
         HdLog.info("HD arc Yaz0-decompressed: {} -> {} bytes",
-                   hdArcPath.filename().string(), inflated->size());
+                   io::fs_path_to_string(hdArcPath.filename()), inflated->size());
         hdBytesOpt = std::move(inflated);
     }
 
@@ -946,7 +998,7 @@ std::optional<std::vector<u8>*> try_load_hd_archive(std::string_view gcPath) {
 
     // std::list keeps element addresses stable for aurora's pointer map.
     std::vector<u8>* mountBytes;
-    std::string filename = hdArcPath.filename().string();
+    std::string filename = io::fs_path_to_string(hdArcPath.filename());
     {
         std::lock_guard lk{g_cacheMutex};
         g_mountBuffers().emplace_back(std::move(*hdBytesOpt));
@@ -975,7 +1027,7 @@ void register_mounted_hd_archive(s32 entryNum, void* arcBytes, size_t arcSize) {
         auto it = g_entryNumToOverlay().find(entryNum);
         if (it == g_entryNumToOverlay().end()) return;
         packPath = it->second->packPath;
-        label = it->second->arcPath.filename().string();
+        label = io::fs_path_to_string(it->second->arcPath.filename());
     }
 
     auto arcSpan = std::span{static_cast<uint8_t*>(arcBytes), arcSize};
@@ -1000,7 +1052,8 @@ void register_copied_hd_resource(s32 entryNum, std::string_view resourceName, vo
     const bool isBti = endsWithSuffixCI(resourceName, ".bti");
     const bool isBmd = endsWithSuffixCI(resourceName, ".bmd") ||
                        endsWithSuffixCI(resourceName, ".bdl");
-    if (!isBti && !isBmd) return;
+    const bool isFont = endsWithSuffixCI(resourceName, ".bfn");
+    if (!isBti && !isBmd && !isFont) return;
 
     std::filesystem::path packPath;
     {
@@ -1019,8 +1072,10 @@ void register_copied_hd_resource(s32 entryNum, std::string_view resourceName, vo
 
     if (isBti) {
         register_hd_bti_replacement_for_buffer(*hdPack, resourceName, buffer, resourceSize, true);
-    } else {
+    } else if (isBmd) {
         register_hd_bmd_textures_for_buffer(*hdPack, resourceName, buffer, resourceSize, true);
+    } else {
+        register_hd_font_replacements_for_buffer(*hdPack, resourceName, buffer, resourceSize, true);
     }
 }
 

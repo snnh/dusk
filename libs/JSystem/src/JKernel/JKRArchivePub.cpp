@@ -24,6 +24,13 @@ void register_copied_hd_resource(
     dusk::tphd::register_copied_hd_resource(archive->mEntryNum,
         archive->mStringTable + fileEntry->getNameOffset(), buffer, resourceSize);
 }
+
+void* fetch_hd_resource(JKRArchive* archive, JKRArchive::SDIFileEntry* fileEntry) {
+    void* resource = archive->fetchResource(fileEntry, NULL);
+    register_copied_hd_resource(archive, fileEntry, resource,
+        resource != NULL ? fileEntry->getSize() : 0);
+    return resource;
+}
 }  // namespace
 #endif
 
@@ -160,7 +167,11 @@ void* JKRArchive::getResource(const char* path) {
     }
 
     if (fileEntry) {
+#if DUSK_TPHD
+        return fetch_hd_resource(this, fileEntry);
+#else
         return fetchResource(fileEntry, NULL);
+#endif
     }
 
     return NULL;
@@ -176,7 +187,11 @@ void* JKRArchive::getResource(u32 type, const char* path) {
     }
 
     if (fileEntry) {
+#if DUSK_TPHD
+        return fetch_hd_resource(this, fileEntry);
+#else
         return fetchResource(fileEntry, NULL);
+#endif
     }
 
     return NULL;
@@ -186,7 +201,11 @@ void* JKRArchive::getIdxResource(u32 index) {
     JUT_ASSERT(384, isMounted());
     SDIFileEntry* fileEntry = findIdxResource(index);
     if (fileEntry) {
+#if DUSK_TPHD
+        return fetch_hd_resource(this, fileEntry);
+#else
         return fetchResource(fileEntry, NULL);
+#endif
     }
 
     return NULL;
@@ -196,7 +215,11 @@ void* JKRArchive::getResource(u16 id) {
     JUT_ASSERT(409, isMounted());
     SDIFileEntry* fileEntry = findIdResource(id);
     if (fileEntry) {
+#if DUSK_TPHD
+        return fetch_hd_resource(this, fileEntry);
+#else
         return fetchResource(fileEntry, NULL);
+#endif
     }
 
     return NULL;

@@ -199,6 +199,7 @@ void dMirror_packet_c::mirrorZdraw(f32* param_0, f32* param_1, f32 param_2, f32 
     }
     GXEnd();
 
+#if defined(GX2_SUPPORTS_STENCIL_API)
     if (mQuadCount >= 2 && GX2SupportsStencil()) {
         GXSetColorUpdate(GX_DISABLE);
         GXSetAlphaUpdate(GX_DISABLE);
@@ -233,6 +234,7 @@ void dMirror_packet_c::mirrorZdraw(f32* param_0, f32* param_1, f32 param_2, f32 
         GXSetAlphaUpdate(GX_DISABLE); // no stencil-off: the next material's zmode write disables it
         return;
     }
+#endif
 #else
     GXBegin(GX_QUADS, GX_VTXFMT0, 4);
     for (int i = 0; i < 4; i++) {

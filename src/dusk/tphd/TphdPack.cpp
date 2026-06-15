@@ -2,10 +2,11 @@
 
 #include <zlib.h>
 
-#include <cstdio>
 #include <cstring>
+#include <exception>
 
 #include "dusk/endian.h"
+#include "dusk/io.hpp"
 #include "dusk/logging.h"
 
 static aurora::Module TphdLog("dusk::tphd");
@@ -15,17 +16,12 @@ namespace dusk::tphd {
 namespace {
 
 std::optional<std::vector<u8>> readFile(const std::filesystem::path& path) {
-    std::FILE* f = std::fopen(path.string().c_str(), "rb");
-    if (!f) return std::nullopt;
-    std::fseek(f, 0, SEEK_END);
-    long len = std::ftell(f);
-    std::fseek(f, 0, SEEK_SET);
-    if (len < 0) { std::fclose(f); return std::nullopt; }
-    std::vector<u8> buf(static_cast<size_t>(len));
-    size_t got = std::fread(buf.data(), 1, buf.size(), f);
-    std::fclose(f);
-    if (got != buf.size()) return std::nullopt;
-    return buf;
+    try {
+        return dusk::io::FileStream::ReadAllBytes(path);
+    } catch (const std::exception& e) {
+        TphdLog.warn("Failed to read {}: {}", dusk::io::fs_path_to_string(path), e.what());
+        return std::nullopt;
+    }
 }
 
 }
@@ -104,7 +100,7 @@ std::optional<TphdPack> TphdPack::loadFromMemory(std::span<const u8> gzipBytes) 
 std::optional<TphdPack> TphdPack::loadFromFile(const std::filesystem::path& path) {
     auto raw = readFile(path);
     if (!raw) {
-        TphdLog.error("Failed to read {}", path.string());
+        TphdLog.error("Failed to read {}", dusk::io::fs_path_to_string(path));
         return std::nullopt;
     }
     return loadFromMemory(*raw);

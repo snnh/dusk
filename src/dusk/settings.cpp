@@ -2,6 +2,7 @@
 #include "dusk/config.hpp"
 #include "dusk/main.h"
 
+#include <cstdlib>
 #include <system_error>
 
 namespace dusk {
@@ -200,8 +201,22 @@ UserSettings& getSettings() {
     return g_userSettings;
 }
 
+bool tphd_disabled_by_environment() {
+    const char* value = std::getenv("DUSK_DISABLE_TPHD");
+    if (value == nullptr || value[0] == '\0') {
+        return false;
+    }
+
+    const std::string_view setting{value};
+    return setting != "0" && setting != "false" && setting != "False" && setting != "FALSE";
+}
+
 std::filesystem::path tphd_content_path() {
 #if DUSK_TPHD
+    if (tphd_disabled_by_environment()) {
+        return {};
+    }
+
     const std::string& hdPath = g_userSettings.backend.hdContentPath;
     if (!hdPath.empty()) {
         return hdPath;
