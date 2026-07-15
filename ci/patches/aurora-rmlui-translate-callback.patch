@@ -1,5 +1,5 @@
 diff --git a/extern/CMakeLists.txt b/extern/CMakeLists.txt
-index c72a861..2546072 100644
+index 10c135b..1ecb93e 100644
 --- a/extern/CMakeLists.txt
 +++ b/extern/CMakeLists.txt
 @@ -3,10 +3,10 @@ include(FetchContent)
@@ -16,7 +16,7 @@ index c72a861..2546072 100644
  endif ()
  
  function(aurora_find_package_global)
-@@ -116,7 +116,7 @@ if (AURORA_ENABLE_GX)
+@@ -115,7 +115,7 @@ if (AURORA_ENABLE_GX)
    endif ()
    if (NOT TARGET ZLIB::ZLIB)
      message(STATUS "aurora: Fetching zlib")
@@ -25,7 +25,7 @@ index c72a861..2546072 100644
      set(ZLIB_BUILD_TESTING OFF CACHE BOOL "Enable Zlib Examples as tests" FORCE)
      set(ZLIB_INSTALL OFF CACHE BOOL "Enable installation of zlib" FORCE)
      set(ZLIB_COMPAT ON CACHE BOOL "Use the compat version of zlib instead of the newer zlib-ng" FORCE)
-@@ -127,8 +127,36 @@ if (AURORA_ENABLE_GX)
+@@ -126,8 +126,36 @@ if (AURORA_ENABLE_GX)
        DOWNLOAD_EXTRACT_TIMESTAMP FALSE
        EXCLUDE_FROM_ALL
      )
@@ -77,7 +77,7 @@ index 7d901b2..7c83792 100644
  struct RuntimeTexture {
    uint32_t width = 0;
 diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
-index 3ee2cd4..2a840e1 100644
+index ff5f52c..09c1a79 100644
 --- a/include/dolphin/gx/GXAurora.h
 +++ b/include/dolphin/gx/GXAurora.h
 @@ -2,6 +2,7 @@
@@ -85,10 +85,23 @@ index 3ee2cd4..2a840e1 100644
  
  #include <dolphin/types.h>
 +#include <dolphin/gx/GXEnum.h>
- 
- #if __cplusplus
+
+#if __cplusplus
  extern "C" {
-@@ -98,6 +99,22 @@ extern "C" {
+@@ -23,6 +24,12 @@ extern "C" {
+  */
+ #define GX_AURORA_LOAD_SCISSOR_RENDER 0x0002
+ 
++/**
++ * Loads a full 4x4 projection matrix, bypassing GXSetProjection's 6-parameter
++ * hardware encoding. Must be followed by sixteen f32 values in row-major order.
++ */
++#define GX_AURORA_LOAD_PROJECTION_FULL 0x0003
++
+ /**
+  * Aurora equivalent of CP_REG_ARRAYBASE_ID: sets the base address and size of a vertex array.
+  * This command must be followed by a 64-bit memory address, 32-bit size, and 1-byte little-endian flag.
+@@ -92,6 +99,22 @@ extern "C" {
  
  #define GX2_SET_POLYGON_OFFSET 0x1000
  
@@ -111,8 +124,15 @@ index 3ee2cd4..2a840e1 100644
  
  /*
   * Debug marker stuff
-@@ -150,6 +167,37 @@ void GXSetScissorRender(u32 left, u32 top, u32 wd, u32 ht);
+@@ -142,8 +165,44 @@ void GXSetViewportRender(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
+  */
+ void GXSetScissorRender(u32 left, u32 top, u32 wd, u32 ht);
  
++/**
++ * Load an arbitrary 4x4 projection matrix, avoiding the 6-parameter hardware encoding.
++ */
++void GXSetProjectionFull(const void* mtx);
++
  void GX2SetPolygonOffset(f32 mFrontOffset, f32 mFrontScale, f32 mBackOffset, f32 mBackScale, f32 mClamp);
  
 +typedef enum GXStencilOp {
@@ -147,10 +167,10 @@ index 3ee2cd4..2a840e1 100644
 +GXBool GX2SupportsStencil(void);
 +
  /**
-  * Load an arbitrary 4x4 projection matrix, avoiding the 6-parameter hardware encoding.
-  */
+  * Create an offscreen framebuffer and switch rendering to it.
+  * All subsequent GX rendering will target this framebuffer until GXRestoreFrameBuffer() is called.
 diff --git a/lib/dolphin/gx/GXAurora.cpp b/lib/dolphin/gx/GXAurora.cpp
-index af3c4cb..a131cd1 100644
+index 2549a6b..a131cd1 100644
 --- a/lib/dolphin/gx/GXAurora.cpp
 +++ b/lib/dolphin/gx/GXAurora.cpp
 @@ -8,6 +8,7 @@
@@ -158,10 +178,25 @@ index af3c4cb..a131cd1 100644
  #include "../../gfx/common.hpp"
  #include "../../gx/fifo.hpp"
 +#include "../../webgpu/gpu.hpp"
- 
- static void GXWriteString(const char* label) {
+
+static void GXWriteString(const char* label) {
    auto length = strlen(label);
-@@ -83,6 +84,41 @@ void GX2SetPolygonOffset(f32 mFrontOffset, f32 mFrontScale, f32 mBackOffset, f32
+@@ -66,6 +67,14 @@ void GXSetScissorRender(u32 left, u32 top, u32 wd, u32 ht) {
+   GX_WRITE_U32(ht);
+ }
+ 
++void GXSetProjectionFull(const void* mtx) {
++  const f32* values = reinterpret_cast<const f32*>(mtx);
++  GX_WRITE_AURORA(GX_AURORA_LOAD_PROJECTION_FULL);
++  for (int i = 0; i < 16; ++i) {
++    GX_WRITE_F32(values[i]);
++  }
++}
++
+ void GX2SetPolygonOffset(f32 mFrontOffset, f32 mFrontScale, f32 mBackOffset, f32 mBackScale, f32 mClamp) {
+   GX_WRITE_AURORA(GX2_SET_POLYGON_OFFSET);
+   GX_WRITE_F32(mFrontOffset);
+@@ -75,6 +84,41 @@ void GX2SetPolygonOffset(f32 mFrontOffset, f32 mFrontScale, f32 mBackOffset, f32
    GX_WRITE_F32(mClamp);
  }
  
@@ -204,10 +239,10 @@ index af3c4cb..a131cd1 100644
    GX_WRITE_AURORA(GX_AURORA_BEGIN_OFFSCREEN);
    GX_WRITE_U32(width);
 diff --git a/lib/gfx/common.cpp b/lib/gfx/common.cpp
-index 7862182..080d68d 100644
+index 73ed55d..4a70c2b 100644
 --- a/lib/gfx/common.cpp
 +++ b/lib/gfx/common.cpp
-@@ -464,11 +464,11 @@ static void set_efb_targets(RenderPass& pass) {
+@@ -386,11 +386,11 @@ static void set_efb_targets(RenderPass& pass) {
        webgpu::g_graphicsConfig.msaaSamples > 1 ? webgpu::g_frameBufferResolved.texture : webgpu::g_frameBuffer.texture;
    pass.copySourceView =
        webgpu::g_graphicsConfig.msaaSamples > 1 ? webgpu::g_frameBufferResolved.view : webgpu::g_frameBuffer.view;
@@ -221,7 +256,7 @@ index 7862182..080d68d 100644
  }
  
  struct OffscreenCacheKey {
-@@ -1878,9 +1878,12 @@ static void render(wgpu::CommandEncoder& cmd, FramePacket& frame, RenderPass& pa
+@@ -1441,9 +1441,12 @@ static void render(wgpu::CommandEncoder& cmd, FramePacket& frame, RenderPass& pa
                                           : wgpu::LoadOp::Undefined,
          .depthStoreOp = passInfo.hasDepth ? passInfo.depthStoreOp : wgpu::StoreOp::Undefined,
          .depthClearValue = passInfo.clearDepthValue,
@@ -238,7 +273,7 @@ index 7862182..080d68d 100644
      depthStencilAttachmentPtr = &depthStencilAttachment;
    }
 diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
-index ef54b31..79bfb61 100644
+index cd12369..79bfb61 100644
 --- a/lib/gx/command_processor.cpp
 +++ b/lib/gx/command_processor.cpp
 @@ -739,6 +739,8 @@ static void handle_bp(u32 value, bool bigEndian) {
@@ -258,7 +293,24 @@ index ef54b31..79bfb61 100644
    });
  }
  
-@@ -1866,6 +1869,25 @@ void handle_aurora(const u8* data, u32& pos, u32 size, bool bigEndian) {
+@@ -1741,6 +1744,16 @@ void handle_aurora(const u8* data, u32& pos, u32 size, bool bigEndian) {
+     const int32_t height = static_cast<int32_t>(read_u32(data + pos, bigEndian));
+     pos += 4;
+     set_render_scissor({left, top, width, height});
++  } else if (subCmd == GX_AURORA_LOAD_PROJECTION_FULL) {
++    CHECK(pos + 64 <= size, "GX_AURORA_LOAD_PROJECTION_FULL read overrun");
++    auto& proj = g_gxState.proj;
++    for (int r = 0; r < 4; ++r) {
++      for (int c = 0; c < 4; ++c) {
++        proj[r][c] = read_f32(data + pos, bigEndian);
++        pos += 4;
++      }
++    }
++    g_gxState.stateDirty = true;
+   } else if (subCmd >= GX_AURORA_LOAD_ARRAYBASE && subCmd <= (GX_AURORA_LOAD_ARRAYBASE | 0x0f)) {
+     CHECK(pos + 13 <= size, "GX_AURORA_LOAD_ARRAYBASE read overrun");
+     u32 attrIdx = subCmd - GX_AURORA_LOAD_ARRAYBASE + GX_VA_POS;
+@@ -1856,6 +1869,25 @@ void handle_aurora(const u8* data, u32& pos, u32 size, bool bigEndian) {
      gfx::begin_offscreen(width, height);
    } else if (subCmd == GX_AURORA_END_OFFSCREEN) {
      gfx::end_offscreen();
@@ -475,18 +527,19 @@ index 9fc6703..be33f47 100644
  
  } // namespace aurora::rmlui
 diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
-index 37fb564..21c4153 100644
+index 37fb564..fdae0e3 100644
 --- a/lib/webgpu/gpu.cpp
 +++ b/lib/webgpu/gpu.cpp
-@@ -65,6 +65,7 @@ bool g_bcTexturesSupported = false;
+@@ -65,6 +65,8 @@ bool g_bcTexturesSupported = false;
  bool g_astcTexturesSupported = false;
  bool g_textureComponentSwizzleSupported = false;
  static std::atomic_bool g_initialized = false;
-+bool g_depthStencilSupported = false;
++static std::atomic_bool g_shuttingDown = false;
++bool g_depthStencilSupported;
  
  namespace {
  
-@@ -377,6 +378,13 @@ static TextureWithSampler create_depth_texture(uint32_t width, uint32_t height)
+@@ -377,6 +379,13 @@ static TextureWithSampler create_depth_texture(uint32_t width, uint32_t height)
    };
    auto view = texture.CreateView(&viewDescriptor);
  
@@ -500,7 +553,7 @@ index 37fb564..21c4153 100644
    const wgpu::SamplerDescriptor samplerDescriptor{
        .label = "Depth sampler",
        .addressModeU = wgpu::AddressMode::ClampToEdge,
-@@ -397,6 +405,7 @@ static TextureWithSampler create_depth_texture(uint32_t width, uint32_t height)
+@@ -397,6 +406,7 @@ static TextureWithSampler create_depth_texture(uint32_t width, uint32_t height)
        .size = size,
        .format = format,
        .sampler = std::move(sampler),
@@ -508,7 +561,7 @@ index 37fb564..21c4153 100644
    };
  }
  
-@@ -893,6 +902,7 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+@@ -893,6 +903,7 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
      g_bcTexturesSupported = false;
      g_astcTexturesSupported = false;
      g_textureComponentSwizzleSupported = false;
@@ -516,7 +569,7 @@ index 37fb564..21c4153 100644
      wgpu::SupportedFeatures supportedFeatures;
      g_adapter.GetFeatures(&supportedFeatures);
      for (size_t i = 0; i < supportedFeatures.featureCount; ++i) {
-@@ -1034,9 +1044,10 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+@@ -1034,9 +1045,10 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
                .height = size.native_fb_height,
                .presentMode = presentMode,
            },
@@ -548,4 +601,3 @@ index 3943da0..d1ceee6 100644
  };
  struct Viewport {
    float left;
-
