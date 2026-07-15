@@ -516,7 +516,6 @@ void graphics_tuner_control(Window& window, Pane& leftPane, Pane& rightPane, Con
 
 SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
     if (prelaunch) {
-        mSuppressNavFallback = true;
         add_tab("[PRELAUNCH]", [this](Rml::Element* content) {
             auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
             auto& rightPane = add_child<Pane>(content, Pane::Type::Uncontrolled);
@@ -998,6 +997,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             [] {
                 return getSettings().game.enableFrameInterpolation.getValue() !=
                        FrameInterpMode::Capped;
+            },
             [](int) { android::update_surface_frame_rate(); });
         config_bool_select(leftPane, rightPane, getSettings().game.enableMapBackground,
             {
