@@ -20,8 +20,9 @@
 #include "dusk/io.hpp"
 #include "dusk/settings.h"
 #include "i18n.hpp"
-#include "input.hpp"
 #include "icon_provider.hpp"
+#include "input.hpp"
+#include "mod_texture_provider.hpp"
 #include "prelaunch.hpp"
 #include "window.hpp"
 
@@ -51,9 +52,40 @@ void apply_ui_language_font_class() {
 }
 
 bool sInitialized = false;
-std::vector<std::unique_ptr<Document> > sDocumentStack;
+std::vector<std::unique_ptr<Document>> sDocumentStack;
 // Documents that don't participate in the focus stack
-std::vector<std::unique_ptr<Document> > sPassiveDocuments;
+std::vector<std::unique_ptr<Document>> sPassiveDocuments;
+
+struct ScopedStyles {
+    DocumentScope scope;
+    std::string id;
+    Rml::SharedPtr<Rml::StyleSheetContainer> sheet;
+};
+std::vector<ScopedStyles> sScopedStyles;
+
+std::vector<const Rml::StyleSheetContainer*> scoped_sheets(DocumentScope scope) {
+    std::vector<const Rml::StyleSheetContainer*> sheets;
+    for (const auto& entry : sScopedStyles) {
+        if (entry.scope == scope) {
+            sheets.push_back(entry.sheet.get());
+        }
+    }
+    return sheets;
+}
+
+void restyle_scope(DocumentScope scope) {
+    const auto sheets = scoped_sheets(scope);
+    const auto restyle_documents = [&sheets, scope](auto& documents) {
+        for (auto& doc : documents) {
+            if (doc != nullptr && doc->scope() == scope && !doc->closed()) {
+                doc->restyle(sheets);
+            }
+        }
+    };
+    restyle_documents(sDocumentStack);
+    restyle_documents(sPassiveDocuments);
+}
+
 std::deque<Toast> sToasts;
 bool sMenuNotificationRequested = false;
 
@@ -91,12 +123,14 @@ bool initialize() noexcept {
     apply_ui_language_font_class();
 
     register_icon_texture_provider();
+    register_mod_texture_provider();
     sInitialized = true;
     return true;
 }
 
 void shutdown() noexcept {
-    config::Save();
+    config::save();
+    unregister_mod_texture_provider();
     aurora::rmlui::set_translate_callback({});
     i18n::shutdown();
     unregister_icon_texture_provider();
@@ -173,8 +207,8 @@ void handle_event(const SDL_Event& event) noexcept {
                 Rml::String title = "[CONTROLLER_CONNECTED]";
                 if (const char* icon = connection_state_icon(SDL_GetGamepadConnectionState(gamepad))) {
                     title = fmt::format(
-                        "<row><span>{}</span> <icon class=\"connection\">&#x{};</icon></row>", title,
-                        icon);
+                        "<row><span>{}</span> <icon class=\"connection\">&#x{};</icon></row>",
+                        title, icon);
                 }
                 int batteryLevel = -1;
                 const auto powerState = SDL_GetGamepadPowerInfo(gamepad, &batteryLevel);
@@ -213,6 +247,34 @@ void handle_event(const SDL_Event& event) noexcept {
     input::handle_event(event);
 }
 
+bool register_scoped_styles(DocumentScope scope, std::string id, const std::string& rcss) noexcept {
+    auto sheet = Rml::Factory::InstanceStyleSheetString(rcss);
+    if (sheet == nullptr) {
+        return false;
+    }
+    const auto it = std::ranges::find_if(sScopedStyles,
+        [scope, &id](const ScopedStyles& entry) { return entry.scope == scope && entry.id == id; });
+    if (it != sScopedStyles.end()) {
+        it->sheet = std::move(sheet);
+    } else {
+        sScopedStyles.push_back({scope, std::move(id), std::move(sheet)});
+    }
+    restyle_scope(scope);
+    return true;
+}
+
+void unregister_scoped_styles(DocumentScope scope, std::string_view id) noexcept {
+    const auto erased = std::erase_if(sScopedStyles,
+        [scope, id](const ScopedStyles& entry) { return entry.scope == scope && entry.id == id; });
+    if (erased != 0) {
+        restyle_scope(scope);
+    }
+}
+
+void apply_scoped_styles(Document& doc) noexcept {
+    doc.restyle(scoped_sheets(doc.scope()));
+}
+
 Document& push_document(std::unique_ptr<Document> doc, bool show, bool passive) noexcept {
     Document& ret = *doc;
     if (passive) {
@@ -227,9 +289,9 @@ Document& push_document(std::unique_ptr<Document> doc, bool show, bool passive) 
     return ret;
 }
 
-void show_top_document() noexcept {
+void uncover_top_document() noexcept {
     if (auto* doc = top_document()) {
-        doc->show();
+        doc->uncover();
     }
     input::sync_input_block();
 }
@@ -242,13 +304,25 @@ bool any_document_visible() noexcept {
 bool is_prelaunch_open() noexcept {
     return std::any_of(sDocumentStack.begin(), sDocumentStack.end(), [](const auto& doc) {
         const auto* prelaunch = dynamic_cast<const Prelaunch*>(doc.get());
-        return prelaunch != nullptr && !prelaunch->pending_close() && !prelaunch->closed();
+        return prelaunch != nullptr && prelaunch->active();
     });
+}
+
+bool game_obscured_below(const Document& doc) noexcept {
+    for (const auto& entry : sDocumentStack) {
+        if (entry.get() == &doc) {
+            break;
+        }
+        if (entry->active() && entry->obscures_game()) {
+            return true;
+        }
+    }
+    return false;
 }
 
 Document* top_document() noexcept {
     for (auto& doc : std::views::reverse(sDocumentStack)) {
-        if (!doc->closed() && !doc->pending_close()) {
+        if (doc->active()) {
             return doc.get();
         }
     }
@@ -293,7 +367,7 @@ void update() noexcept {
                                   context->GetFocusElement() == context->GetRootElement()))
     {
         for (auto& doc : std::views::reverse(sDocumentStack)) {
-            if (!doc->closed() && !doc->pending_close() && doc->focus()) {
+            if (doc->active() && doc->focus()) {
                 break;
             }
         }
@@ -340,6 +414,17 @@ Rml::Element* append(Rml::Element* parent, const Rml::String& tag) noexcept {
         return nullptr;
     }
     return parent->AppendChild(doc->CreateElement(tag));
+}
+
+Rml::Element* append_text(Rml::Element* parent, const Rml::String& text) noexcept {
+    if (parent == nullptr) {
+        return nullptr;
+    }
+    auto* doc = parent->GetOwnerDocument();
+    if (doc == nullptr) {
+        return nullptr;
+    }
+    return parent->AppendChild(doc->CreateTextNode(text));
 }
 
 NavCommand map_nav_event(const Rml::Event& event) noexcept {
@@ -408,7 +493,7 @@ void push_toast(Toast toast) noexcept {
     sToasts.push_back(std::move(toast));
 }
 
-std::vector<std::unique_ptr<Document> >& get_document_stack() noexcept {
+std::vector<std::unique_ptr<Document>>& get_document_stack() noexcept {
     return sDocumentStack;
 }
 

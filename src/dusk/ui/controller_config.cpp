@@ -244,11 +244,7 @@ int rumble_raw_to_percent(u16 raw) {
 
 }  // namespace
 
-ControllerConfigWindow::ControllerConfigWindow(bool prelaunch) {
-    if (prelaunch) {
-        mSuppressNavFallback = true;
-    }
-
+ControllerConfigWindow::ControllerConfigWindow() {
     listen(
         Rml::EventId::Keydown,
         [this](Rml::Event& event) {
@@ -279,7 +275,7 @@ ControllerConfigWindow::ControllerConfigWindow(bool prelaunch) {
 void ControllerConfigWindow::hide(bool close) {
     stop_rumble_test();
     cancel_pending_binding();
-    config::Save();
+    config::save();
     Window::hide(close);
 }
 
@@ -406,7 +402,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
                 PADClearPort(port);
                 PADSetKeyboardActive(static_cast<u32>(port), FALSE);
                 PADSerializeMappings();
-                ClearAllActionBindings(port);
+                config::ClearAllActionBindings(port);
                 refresh_controller_page();
             });
 
@@ -420,7 +416,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
                 PADClearPort(port);
                 PADSetKeyboardActive(static_cast<u32>(port), TRUE);
                 PADSerializeMappings();
-                ClearAllActionBindings(port);
+                config::ClearAllActionBindings(port);
             });
 
         const u32 controllerCount = PADCount();
@@ -442,7 +438,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
                     PADSetKeyboardActive(static_cast<u32>(port), FALSE);
                     PADSetPortForIndex(i, port);
                     PADSerializeMappings();
-                    ClearAllActionBindings(port);
+                    config::ClearAllActionBindings(port);
                 });
         }
         break;
@@ -1124,7 +1120,7 @@ void ControllerConfigWindow::poll_pending_binding() {
                 return;
             }
             mPendingActionBinding->setValue(button);
-            config::Save();
+            config::save();
             finish_pending_binding(completedPort);
         }
         return;

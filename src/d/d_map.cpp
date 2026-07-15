@@ -337,7 +337,7 @@ f32 renderingAmap_c::getIconSize(u8 i_typeGroup) const {
     return iconSize;
 }
 
-dMap_prm_res_s* dMap_HIO_prm_res_dst_s::m_res;
+DUSK_GAME_DATA dMap_prm_res_s* dMap_HIO_prm_res_dst_s::m_res;
 
 inline u8 twoValueLineInterpolation(u8 param_0, u8 param_1, f32 param_2) {
     return ((f32)param_0 + (param_2 * ((f32)param_1 - (f32)param_0)));
@@ -1640,7 +1640,7 @@ void dMap_c::_move(f32 i_centerX, f32 i_centerZ, int i_roomNo, f32 param_3) {
 
         mCenterX += IF_DUSK(dusk::getSettings().game.enableMirrorMode ? -mPackX :) mPackX;
         mCenterZ -= mPackZ;
-        mCenterX += field_0x64;
+        mCenterX += IF_DUSK(dusk::getSettings().game.enableMirrorMode ? -field_0x64 : ) field_0x64;
         mCenterZ += mPackPlusZ;
     }
 
@@ -1649,6 +1649,8 @@ void dMap_c::_move(f32 i_centerX, f32 i_centerZ, int i_roomNo, f32 param_3) {
     {
 #if DEBUG
         field_0x64 = 33830.0f;
+#elif TARGET_PC
+        field_0x64 = dusk::getSettings().game.enableMirrorMode ? 33830.0f : 0.0f;
 #else
         field_0x64 = 0.0f;
 #endif
@@ -1657,6 +1659,9 @@ void dMap_c::_move(f32 i_centerX, f32 i_centerZ, int i_roomNo, f32 param_3) {
         f32 temp = (field_0x58 * (f32)(field_0x74 + 4)) * 0.5f;
 #if DEBUG
         mRightEdgePlus = -(((dMpath_c::getMinZ() - (-127103.67f)) - temp) / field_0x58);
+
+#elif TARGET_PC
+        mRightEdgePlus = dusk::getSettings().game.enableMirrorMode ? -(((dMpath_c::getMinX() - (-127103.67f)) - temp) / field_0x58) : 0.0f;
 #else
         mRightEdgePlus = 0.0f;
 #endif

@@ -23,18 +23,6 @@
       }
     },
     {
-      "name": "release",
-      "hidden": true,
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDLL",
-        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": {
-          "type": "BOOL",
-          "value": true
-        }
-      }
-    },
-    {
       "name": "ci",
       "hidden": true,
       "cacheVariables": {
@@ -72,7 +60,11 @@
           "type": "BOOL",
           "value": false
         },
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install",
+        "DUSK_ENABLE_CODE_MODS": {
+          "type": "BOOL",
+          "value": true
+        }
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -158,7 +150,15 @@
       "cacheVariables": {
         "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install",
+        "DUSK_ENABLE_CODE_MODS": {
+          "type": "BOOL",
+          "value": true
+        },
+        "CMAKE_DISABLE_FIND_PACKAGE_PkgConfig": {
+          "type": "BOOL",
+          "value": true
+        }
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -196,16 +196,12 @@
     {
       "name": "windows-arm64-msvc",
       "displayName": "Windows ARM64 (MSVC)",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/${presetName}",
+      "inherits": [
+        "windows-msvc"
+      ],
       "architecture": {
         "value": "arm64",
         "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "cl",
-        "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install"
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -258,7 +254,11 @@
           "type": "BOOL",
           "value": false
         },
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install",
+        "DUSK_ENABLE_CODE_MODS": {
+          "type": "BOOL",
+          "value": true
+        }
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -390,6 +390,10 @@
           "type": "BOOL",
           "value": false
         },
+        "DUSK_ENABLE_CODE_MODS": {
+          "type": "BOOL",
+          "value": true
+        },
         "CMAKE_DISABLE_FIND_PACKAGE_PkgConfig": {
           "type": "BOOL",
           "value": true
@@ -425,8 +429,7 @@
       "hidden": true,
       "inherits": [
         "android-base",
-        "ci",
-        "release"
+        "ci"
       ],
       "cacheVariables": {
         "DUSK_ENABLE_SENTRY_NATIVE": {

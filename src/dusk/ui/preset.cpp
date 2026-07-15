@@ -103,7 +103,7 @@ PresetWindow::PresetWindow() : WindowSmall("modal", "modal-dialog") {
             if (cmd == NavCommand::Confirm) {
                 apply();
                 getSettings().backend.wasPresetChosen.setValue(true);
-                config::Save();
+                config::save();
                 hide(true);
                 return true;
             }

@@ -360,7 +360,12 @@ inline void dMsgObject_demoMessageGroup() {
 }
 
 inline bool dMsgObject_isTalkNowCheck() {
+#if TARGET_PC
+    dMsgObject_c* msgObject = dMsgObject_getMsgObjectClass();
+    return msgObject != NULL && msgObject->getStatus() != 1;
+#else
     return dMsgObject_getMsgObjectClass()->getStatus() == 1 ? false : true;
+#endif
 }
 
 inline bool dMsgObject_isKillMessageFlag() {
@@ -497,7 +502,12 @@ inline void dMsgObject_onMsgSend() {
 }
 
 inline bool dMsgObject_isFukidashiCheck() {
+#if TARGET_PC
+    dMsgObject_c* msgObject = dMsgObject_getMsgObjectClass();
+    return msgObject != NULL && msgObject->getScrnDrawPtr() != NULL;
+#else
     return dMsgObject_getMsgObjectClass()->getScrnDrawPtr() == NULL ? false : true;
+#endif
 }
 
 inline void* dMsgObject_getTalkHeap() {
@@ -761,6 +771,6 @@ public:
     /* 0x35C */ dMsgObject_HowlHIO_c mHowlHIO;
 };
 
-extern dMsgObject_HIO_c g_MsgObject_HIO_c;
+DUSK_GAME_EXTERN dMsgObject_HIO_c g_MsgObject_HIO_c;
 
 #endif /* D_MSG_D_MSG_OBJECT_H */

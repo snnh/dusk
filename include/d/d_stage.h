@@ -4,7 +4,7 @@
 #include "SSystem/SComponent/c_lib.h"
 #include "d/d_kankyo.h"
 #include "d/d_kankyo_data.h"
-#include "dusk/offset_ptr.h"
+#include "helpers/offset_ptr.h"
 #include "f_op/f_op_actor_mng.h"
 #include "global.h"
 #include "os_report.h"
@@ -538,7 +538,7 @@ public:
     /* vt[86] */ virtual stage_tgsc_class* getDrTg(void) const = 0;
     /* vt[87] */ virtual void setDoor(stage_tgsc_class*) = 0;
     /* vt[88] */ virtual stage_tgsc_class* getDoor(void) const = 0;
-#if DEBUG
+#if PARTIAL_DEBUG || DEBUG
     virtual void setUnit(void*) = 0;
     virtual void* getUnit() = 0;
 #endif
@@ -796,7 +796,7 @@ public:
     virtual stage_tgsc_class* getDrTg(void) const { return mDrTg; }
     virtual void setDoor(stage_tgsc_class* i_Door) { mDoor = i_Door; }
     virtual stage_tgsc_class* getDoor(void) const { return mDoor; }
-#if DEBUG
+#if PARTIAL_DEBUG || DEBUG
     virtual void setUnit(void* i_Unit) { mUnit = i_Unit; }
     virtual void* getUnit() { return mUnit; }
 #endif
@@ -845,7 +845,7 @@ public:
     /* 0x54 */ stage_tgsc_class* mDrTg;
     /* 0x58 */ stage_tgsc_class* mDoor;
     /* 0x5C */ dStage_FloorInfo_c* mFloorInfo;
-#if DEBUG
+#if PARTIAL_DEBUG || DEBUG
     /* 0x60 */ void* mUnit;
 #endif
     /* 0x60 */ u16 mPlayerNum;
@@ -990,7 +990,7 @@ public:
     /* vt[86] */ virtual stage_tgsc_class* getDrTg(void) const { return mDrTg; }
     /* vt[87] */ virtual void setDoor(stage_tgsc_class* i_Door) { mDoor = i_Door; }
     /* vt[88] */ virtual stage_tgsc_class* getDoor(void) const { return mDoor; }
-#if DEBUG
+#if PARTIAL_DEBUG || DEBUG
     virtual void setUnit(void* i_Unit) {
         UNUSED(i_Unit);
         OSReport("stage non unit list data !!\n");
@@ -1237,20 +1237,20 @@ public:
 
     static const int MEMORY_BLOCK_MAX = 19;
 
-    static JKRExpHeap* mMemoryBlock[MEMORY_BLOCK_MAX];
-    static char mArcBank[32][10];
-    static dStage_roomStatus_c mStatus[0x40];
-    static char mDemoArcName[10];
-    static fpc_ProcID mProcID;
-    static dStage_bankName* mArcBankName;
-    static dStage_bankData* mArcBankData;
-    static roomDzs_c m_roomDzs;
-    static s8 mStayNo;
-    static s8 mOldStayNo;
-    static s8 mNextStayNo;
-    static u8 m_time_pass;
-    static u8 mNoChangeRoom;
-    static s8 mRoomReadId;
+    static DUSK_GAME_DATA JKRExpHeap* mMemoryBlock[MEMORY_BLOCK_MAX];
+    static DUSK_GAME_DATA char mArcBank[32][10];
+    static DUSK_GAME_DATA dStage_roomStatus_c mStatus[0x40];
+    static DUSK_GAME_DATA char mDemoArcName[10];
+    static DUSK_GAME_DATA fpc_ProcID mProcID;
+    static DUSK_GAME_DATA dStage_bankName* mArcBankName;
+    static DUSK_GAME_DATA dStage_bankData* mArcBankData;
+    static DUSK_GAME_DATA roomDzs_c m_roomDzs;
+    static DUSK_GAME_DATA s8 mStayNo;
+    static DUSK_GAME_DATA s8 mOldStayNo;
+    static DUSK_GAME_DATA s8 mNextStayNo;
+    static DUSK_GAME_DATA u8 m_time_pass;
+    static DUSK_GAME_DATA u8 mNoChangeRoom;
+    static DUSK_GAME_DATA s8 mRoomReadId;
 
     #if DEBUG
     static void onNoArcBank() {

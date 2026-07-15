@@ -125,14 +125,6 @@ std::filesystem::path active_pref_path() {
     return get_pref_path();
 }
 
-std::filesystem::path base_path_relative(const std::filesystem::path& path) {
-    const auto* basePath = SDL_GetBasePath();
-    if (!basePath) {
-        return path;
-    }
-    return path_from_utf8(basePath) / path;
-}
-
 std::filesystem::path default_data_path(const std::filesystem::path& prefPath) {
 #ifdef __APPLE__
 #if TARGET_OS_IOS && !TARGET_OS_TV
@@ -998,6 +990,14 @@ void ensure_initial_pipeline_cache(const std::filesystem::path& configDir) {
 
 }  // namespace
 
+std::filesystem::path base_path_relative(const std::filesystem::path& path) {
+    const auto* basePath = SDL_GetBasePath();
+    if (!basePath) {
+        return path;
+    }
+    return path_from_utf8(basePath) / path;
+}
+
 bool open_data_path() {
 #if DUSK_CAN_OPEN_DATA_FOLDER
     std::error_code ec;
@@ -1126,6 +1126,52 @@ Paths initialize_data(bool portableMode) {
         .userPath = dataPath,
         .cachePath = prefPath,
     };
+}
+
+std::filesystem::path user_home_path() {
+    const char* homePath = SDL_GetUserFolder(SDL_FOLDER_HOME);
+    if (homePath == nullptr || homePath[0] == '\0') {
+        return {};
+    }
+    return std::filesystem::path{reinterpret_cast<const char8_t*>(homePath)};
+}
+
+std::filesystem::path normalized_display_path(const std::filesystem::path& path) {
+    std::error_code ec;
+    auto normalized = std::filesystem::weakly_canonical(path, ec);
+    if (!ec) {
+        return normalized;
+    }
+
+    normalized = std::filesystem::absolute(path, ec);
+    if (!ec) {
+        return normalized.lexically_normal();
+    }
+
+    return path.lexically_normal();
+}
+
+std::string abbreviated_path_string(const std::filesystem::path& path) {
+    const auto homePath = user_home_path();
+    if (path.empty() || homePath.empty()) {
+        return io::fs_path_to_string(path);
+    }
+
+    const auto normalizedPath = normalized_display_path(path);
+    const auto normalizedHome = normalized_display_path(homePath);
+    if (normalizedPath == normalizedHome) {
+        return "~";
+    }
+
+    const auto relativePath = normalizedPath.lexically_relative(normalizedHome);
+    if (!relativePath.empty() && !relativePath.is_absolute()) {
+        const auto it = relativePath.begin();
+        if (it == relativePath.end() || *it != "..") {
+            return io::fs_path_to_string(std::filesystem::path{"~"} / relativePath);
+        }
+    }
+
+    return io::fs_path_to_string(path);
 }
 
 }  // namespace dusk::data

@@ -16,7 +16,7 @@
 #endif
 
 struct dMdm_HIO_prm_res_dst_s {
-    static void* m_res;
+    static DUSK_GAME_DATA void* m_res;
 };
 
 bool renderingDmap_c::hasMap() const {
@@ -288,7 +288,7 @@ void renderingDmap_c::afterDrawPath() {
     renderingPlusDoor_c::afterDrawPath();
 }
 
-void* dMdm_HIO_prm_res_dst_s::m_res;
+DUSK_GAME_DATA void* dMdm_HIO_prm_res_dst_s::m_res;
 
 void dMenu_DmapMap_c::_create(u16 param_0, u16 param_1, u16 param_2, u16 param_3,
                               void* res) {
@@ -359,14 +359,7 @@ f32 dMenu_StageMapCtrl_c::getPixelStageSizeZ() const {
 
 f32 dMenu_StageMapCtrl_c::getPixelCenterX() const {
     f32 var_f31 = dMpath_c::getCenterX();
-    #if TARGET_PC
-    if (dusk::getSettings().game.enableMirrorMode) {
-        return (1.0f / field_0xbc) * (field_0x9c + var_f31);
-    }
-    else return (1.0f / field_0xbc) * (field_0x9c - var_f31);
-    #else
     return (1.0f / field_0xbc) * (field_0x9c - var_f31);
-    #endif
 }
 
 f32 dMenu_StageMapCtrl_c::getPixelCenterZ() const {
@@ -425,18 +418,7 @@ inline static f32 rightModeCnvPos(f32 param_0) {
 void dMenu_StageMapCtrl_c::cnvPosTo2Dpos(f32 param_0, f32 param_1, f32* param_2,
                                          f32* param_3) const {
     if (param_2 != NULL) {
-        #if TARGET_PC
-        if (dusk::getSettings().game.enableMirrorMode) {
-            *param_2 =
-                (0.5f * field_0x94) + rightModeCnvPos((1.0f / field_0xbc) * (field_0x9c + param_0));
-        } else {
-            *param_2 =
-                (0.5f * field_0x94) + rightModeCnvPos((1.0f / field_0xbc) * (param_0 - field_0x9c));
-        }
-        #else
         *param_2 = (0.5f * field_0x94) + rightModeCnvPos((1.0f / field_0xbc) * (param_0 - field_0x9c));
-        #endif
-
     }
 
     if (param_3 != NULL) {
@@ -933,8 +915,7 @@ void dMenu_StageMapCtrl_c::move() {
 
 void dMenu_DmapMapCtrl_c::draw() {
     if (field_0xef != 0) {
-        setPos(field_0xeb, field_0xec,
-            IF_DUSK(dusk::getSettings().game.enableMirrorMode ? -field_0x9c :) field_0x9c,
+        setPos(field_0xeb, field_0xec, field_0x9c,
             field_0xa0, field_0xbc, true, field_0xd8);
     }
 }
@@ -958,13 +939,13 @@ void dMenu_StageMapCtrl_c::_create(u16 param_0, u16 param_1, u16 param_2, u16 pa
     _create(param_0, param_1, param_2, param_3, var_r31, param_4);
 }
 
-f32 dMenu_StageMapCtrl_c::m_zoomCenterMinX;
+DUSK_GAME_DATA f32 dMenu_StageMapCtrl_c::m_zoomCenterMinX;
 
-f32 dMenu_StageMapCtrl_c::m_zoomCenterMaxX;
+DUSK_GAME_DATA f32 dMenu_StageMapCtrl_c::m_zoomCenterMaxX;
 
-f32 dMenu_StageMapCtrl_c::m_zoomCenterMinZ;
+DUSK_GAME_DATA f32 dMenu_StageMapCtrl_c::m_zoomCenterMinZ;
 
-f32 dMenu_StageMapCtrl_c::m_zoomCenterMaxZ;
+DUSK_GAME_DATA f32 dMenu_StageMapCtrl_c::m_zoomCenterMaxZ;
 
 void dMenu_StageMapCtrl_c::_create(u16 width, u16 height, u16 param_2, u16 param_3,
                                    s8 param_4, void* param_5) {

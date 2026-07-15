@@ -29,6 +29,7 @@ struct Paths {
 };
 
 Paths initialize_data(bool portableMode = false);
+std::filesystem::path base_path_relative(const std::filesystem::path& path);
 std::filesystem::path configured_data_path();
 std::filesystem::path cache_path();
 bool open_data_path();
@@ -38,5 +39,8 @@ bool set_portable_data_path();
 bool reset_data_path();
 bool is_default_data_path();
 bool is_data_path_restart_pending();
+std::filesystem::path user_home_path();
+std::filesystem::path normalized_display_path(const std::filesystem::path& path);
+std::string abbreviated_path_string(const std::filesystem::path& path);
 
 }  // namespace dusk::data

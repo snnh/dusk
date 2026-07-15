@@ -70,3 +70,27 @@ for abi in $ANDROID_STAGE_ABIS; do
   esac
   copy_lib "$abi" "$src"
 done
+
+# Stage bundled mod packages into the app's assets source dir.
+MODS_STAGING_DIR="$ROOT_DIR/platforms/android/app/src/main/bundled_mods"
+rm -rf "$MODS_STAGING_DIR"
+mkdir -p "$MODS_STAGING_DIR"
+for abi in $ANDROID_STAGE_ABIS; do
+  case "$abi" in
+    arm64-v8a) build_dir="$ROOT_DIR/build/android-arm64" ;;
+    x86_64) build_dir="$ROOT_DIR/build/android-x86_64" ;;
+  esac
+  [[ -d "$build_dir/bundled_mods" ]] || continue
+  for pkg in "$build_dir/bundled_mods"/*.dusk; do
+    [[ -f "$pkg" ]] || continue
+    name="$(basename "$pkg")"
+    if [[ ! -f "$MODS_STAGING_DIR/$name" ]]; then
+      cp -f "$pkg" "$MODS_STAGING_DIR/$name"
+      echo "Staged bundled mod $pkg"
+    else
+      stage_dir="$build_dir/mods/${name%.dusk}/${name%.dusk}_stage"
+      (cd "$stage_dir" && zip -q -r "$MODS_STAGING_DIR/$name" lib)
+      echo "Appended $abi libraries to bundled mod $name"
+    fi
+  done
+done

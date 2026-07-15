@@ -114,6 +114,15 @@ inline int __builtin_clz(unsigned int v) {
 
 #endif
 
+// Data symbols exported from the main exe need dllimport on the mod side. The game itself
+// exports them through its generated .def, so the annotation is otherwise intentionally empty.
+#if defined(TARGET_PC) && defined(_WIN32) && !defined(DUSK_BUILDING_GAME)
+#define DUSK_GAME_DATA __declspec(dllimport)
+#else
+#define DUSK_GAME_DATA
+#endif
+#define DUSK_GAME_EXTERN extern DUSK_GAME_DATA
+
 #define FAST_DIV(x, n) (x >> (n / 2))
 
 #define SQUARE(x) ((x) * (x))

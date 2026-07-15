@@ -26,7 +26,11 @@
 #include "m_Do/m_Do_graphic.h"
 #include <cstring>
 
-#include "dusk/string.hpp"
+#include "helpers/string.hpp"
+
+#if TARGET_PC
+#include "dusk/frame_interpolation.h"
+#endif
 
 #if (PLATFORM_WII || PLATFORM_SHIELD)
 #define POINTER_OPT dComIfGs_getOptPointer()
@@ -422,7 +426,7 @@ static f32 player_px;
 
 static f32 player_py;
 
-dMenu_Dmap_c* dMenu_Dmap_c::myclass;
+DUSK_GAME_DATA dMenu_Dmap_c* dMenu_Dmap_c::myclass;
 
 void dMenu_DmapBg_c::setCButtonString(u32 i_msgNo) {
     static u64 const c_tag[2] = {
@@ -914,6 +918,20 @@ void dMenu_DmapBg_c::dMapBgWide() {
 void dMenu_DmapBg_c::draw() {
     #if TARGET_PC
     dMapBgWide();
+
+    static bool prevMirror = false; // default state of panes is not mirrored
+    if(prevMirror != dusk::getSettings().game.enableMirrorMode) {
+        if(dusk::getSettings().game.enableMirrorMode) {
+            static_cast<J2DPicture*>(mFloorScreen->search(MULTI_CHAR('rink')))->setMirror(J2DMirror_X);
+            static_cast<J2DPicture*>(mBaseScreen->search(MULTI_CHAR('map000')))->setMirror(J2DMirror_X);
+        }
+        else {
+            static_cast<J2DPicture*>(mFloorScreen->search(MULTI_CHAR('rink')))->setMirror(MIRROR0);
+            static_cast<J2DPicture*>(mBaseScreen->search(MULTI_CHAR('map000')))->setMirror(MIRROR0);
+        }
+
+        prevMirror = dusk::getSettings().game.enableMirrorMode;
+    }
     #endif
 
     u32 scissor_left;
@@ -960,6 +978,15 @@ void dMenu_DmapBg_c::draw() {
         mpBackTexture->setAlpha(dVar17 * (field_0xdbc * field_0xd9c));
 
         f32 local_28c = mpBackTexture->getBounds().i.x;
+
+        #if TARGET_PC
+            if(dusk::getSettings().game.enableMirrorMode) {
+                CPaneMgr mgr;
+                Vec local_94 = mgr.getGlobalVtxCenter(mMapPane, true, 0);
+                local_28c = (local_94.x * 2.0f) - (local_28c + 0.5f * mpBackTexture->getWidth()) - 0.5f * mpBackTexture->getWidth();
+            }
+        #endif
+
         mpBackTexture->setBlackWhite(color_black, color_white);
         mpBackTexture->draw(local_28c, field_0xd94 + mpBackTexture->getBounds().i.y, mpBackTexture->getWidth(),
                             mpBackTexture->getHeight(),
@@ -1981,7 +2008,7 @@ void dMenu_Dmap_c::mapControl() {
         f32 temp_f28 = (var_f29 / 100.0f) * var_f31;
         f32 sp18 = temp_f28 * cM_ssin(stick_angle);
         f32 sp14 = temp_f28 * cM_scos(stick_angle);
-        mMapCtrl->setPlusZoomCenterX(sp18);
+        mMapCtrl->setPlusZoomCenterX(IF_DUSK(dusk::getSettings().game.enableMirrorMode ? -sp18 :) sp18);
         mMapCtrl->setPlusZoomCenterZ(sp14);
     }
 

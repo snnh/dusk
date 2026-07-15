@@ -2194,4 +2194,4 @@ void item_func_WALLET_LV4() {
 }
 #endif
 
-u8* dEnemyItem_c::mData;
+DUSK_GAME_DATA u8* dEnemyItem_c::mData;

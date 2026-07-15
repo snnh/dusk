@@ -28,7 +28,7 @@ bool hit_choice_pane(CPaneMgr* pane, f32 padding) {
 #endif
 
 typedef void (dMsgScrn3Select_c::*processFn)();
-processFn process[] = {
+DUSK_GAME_DATA processFn process[] = {
     &dMsgScrn3Select_c::open1Proc,  &dMsgScrn3Select_c::open2Proc,  &dMsgScrn3Select_c::waitProc,
     &dMsgScrn3Select_c::selectProc, &dMsgScrn3Select_c::changeProc, &dMsgScrn3Select_c::closeProc,
 };
@@ -560,7 +560,8 @@ bool dMsgScrn3Select_c::pointerMove() {
 
         mDPDPoint = choice;
         field_0x110 = paneIndex;
-        dusk::menu_pointer::set_dialog_choice(choice, dusk::menu_pointer::state().clicked);
+        dusk::menu_pointer::set_hover_target(choice);
+        dusk::menu_pointer::set_dialog_choice(choice, dusk::menu_pointer::peek_click());
         return true;
     }
 

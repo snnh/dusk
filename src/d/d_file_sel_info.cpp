@@ -14,7 +14,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "dusk/string.hpp"
+#include "helpers/string.hpp"
 #include "dusk/name_compat.hpp"
 #include "dusk/version.hpp"
 

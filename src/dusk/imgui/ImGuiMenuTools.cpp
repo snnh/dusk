@@ -16,6 +16,7 @@
 #include "dusk/dusk.h"
 #include "dusk/main.h"
 #include "dusk/ui/i18n.hpp"
+#include "dusk/os.h"
 #include "m_Do/m_Do_main.h"
 
 #include <aurora/lib/internal.hpp>
@@ -86,7 +87,7 @@ namespace dusk {
                 bool disableWaterRefraction = getSettings().game.disableWaterRefraction;
                 if (ImGui::Checkbox("Disable Water Refraction", &disableWaterRefraction)) {
                     getSettings().game.disableWaterRefraction.setValue(disableWaterRefraction);
-                    config::Save();
+                    config::save();
                 }
                 ImGui::Checkbox("Enable LOD Bias", &aurora::gx::enableLodBias);
                 ImGui::EndMenu();
