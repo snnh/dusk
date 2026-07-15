@@ -1,10 +1,22 @@
 #include "pane.hpp"
 
+#include "i18n.hpp"
+
 #include "Z2AudioLib/Z2SeMgr.h"
 #include "m_Do/m_Do_audio.h"
 #include "ui.hpp"
 
 namespace dusk::ui {
+
+namespace {
+
+Rml::String translate_text(const Rml::String& text) {
+    Rml::String translated;
+    i18n::translate(translated, text);
+    return translated;
+}
+
+}  // namespace
 namespace {
 
 Rml::Element* createRoot(Rml::Element* parent) {
@@ -166,13 +178,13 @@ bool Pane::focus() {
 Rml::Element* Pane::add_section(const Rml::String& text) {
     auto* elem = append(mRoot, "div");
     elem->SetClass("section-heading", true);
-    append_text(elem, text);
+    append_text(elem, translate_text(text));
     return elem;
 }
 
 Rml::Element* Pane::add_text(const Rml::String& text) {
     auto* elem = append(mRoot, "div");
-    append_text(elem, text);
+    append_text(elem, translate_text(text));
     return elem;
 }
 
