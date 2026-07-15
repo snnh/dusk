@@ -49,6 +49,7 @@ struct PrelaunchState {
     iso::DiscInfo activeDiscInfo{};
     std::string configuredHdContentPath;
     std::string activeHdContentPath;
+    bool initialEnableTphd = true;
     GameLanguage initialLanguage = GameLanguage::English;
     std::string initialGraphicsBackend;
     int initialCardFileType = 0;
@@ -63,6 +64,7 @@ void ensure_initialized() noexcept;
 void refresh_configured_disc_state() noexcept;
 void open_iso_picker() noexcept;
 void open_folder_picker() noexcept;
+void clear_hd_content_path() noexcept;
 bool is_restart_pending() noexcept;
 void try_push_verification_modal(Document& host);
 

@@ -668,6 +668,7 @@ void ensure_initialized() noexcept {
         verification_from_config(getSettings().backend.isoVerification.getValue());
     state.configuredHdContentPath = getSettings().backend.hdContentPath;
     state.activeHdContentPath = state.configuredHdContentPath;
+    state.initialEnableTphd = getSettings().backend.enableTphd;
     state.initialLanguage = getSettings().game.language;
     state.initialGraphicsBackend = getSettings().backend.graphicsBackend;
     state.initialCardFileType = getSettings().backend.cardFileType;
@@ -687,12 +688,23 @@ void open_folder_picker() noexcept {
     ShowFolderSelect(&folder_dialog_callback, nullptr, aurora::window::get_sdl_window(), nullptr);
 }
 
+void clear_hd_content_path() noexcept {
+    ensure_initialized();
+    auto& state = prelaunch_state();
+    state.configuredHdContentPath.clear();
+    getSettings().backend.hdContentPath.setValue("");
+    config::Save();
+}
+
 bool is_restart_pending() noexcept {
     const auto& state = prelaunch_state();
     if (!state.activeDiscPath.empty() && state.configuredDiscPath != state.activeDiscPath) {
         return true;
     }
     if (state.configuredHdContentPath != state.activeHdContentPath) {
+        return true;
+    }
+    if (getSettings().backend.enableTphd.getValue() != state.initialEnableTphd) {
         return true;
     }
     if (data::is_data_path_restart_pending()) {

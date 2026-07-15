@@ -988,4 +988,7 @@
   <entry key="LANGUAGE_HD">Language HD</entry>
   <entry key="TPHD_CONTENT_FOLDER">Dusklight HD Content Folder</entry>
   <entry key="SET_THE_DIRECTORY_THAT_DUSK_LOADS_ELIGIBLE_TPHD_CONTENT_FROM">Set the directory that Dusk loads eligible TPHD content from.</entry>
+  <entry key="CLEAR_TPHD_FOLDER">Clear Folder</entry>
+  <entry key="ENABLE_TPHD">TPHD HD Content</entry>
+  <entry key="DISABLES_THE_EXPERIMENTAL_TPHD_HD_RESOURCE_LAYER_WHEN_OFF">Toggle the experimental TPHD HD resource layer off. When off, HD overrides are not loaded regardless of the configured folder.</entry>
 </localization>

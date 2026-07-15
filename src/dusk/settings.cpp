@@ -165,6 +165,7 @@ UserSettings g_userSettings = {
         .uiLanguage {"backend.uiLanguage", "en"},
 #if DUSK_TPHD
         .hdContentPath {"backend.hdContentPath", ""},
+        .enableTphd {"backend.enableTphd", true},
 #endif
         .graphicsBackend {"backend.graphicsBackend", "auto"},
         .skipPreLaunchUI {"backend.skipPreLaunchUI", false},
@@ -222,6 +223,11 @@ UserSettings& getSettings() {
 
 std::filesystem::path tphd_content_path() {
 #if DUSK_TPHD
+    // Master switch: when TPHD is disabled, hide the HD content path entirely so
+    // that tphd_active() and every consumer behave as if no HD layer exists.
+    if (!g_userSettings.backend.enableTphd) {
+        return {};
+    }
     const std::string& hdPath = g_userSettings.backend.hdContentPath;
     if (!hdPath.empty()) {
         return hdPath;
@@ -377,6 +383,7 @@ void registerSettings() {
     Register(g_userSettings.backend.uiLanguage);
 #if DUSK_TPHD
     Register(g_userSettings.backend.hdContentPath);
+    Register(g_userSettings.backend.enableTphd);
 #endif
     Register(g_userSettings.backend.graphicsBackend);
     Register(g_userSettings.backend.skipPreLaunchUI);

@@ -278,6 +278,10 @@ struct UserSettings {
         ConfigVar<std::string> uiLanguage;
 #if DUSK_TPHD
         ConfigVar<std::string> hdContentPath;
+        // Master switch for the experimental TPHD HD resource layer. When off,
+        // tphd_content_path() returns empty regardless of the configured folder
+        // or the <config>/tphd/content fallback. Defaults on to preserve behavior.
+        ConfigVar<bool> enableTphd;
 #endif
         ConfigVar<std::string> graphicsBackend;
         ConfigVar<bool> skipPreLaunchUI;

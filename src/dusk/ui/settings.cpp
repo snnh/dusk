@@ -642,6 +642,36 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 rightPane, [](Pane& pane) {
                     pane.add_rml("[SET_THE_DIRECTORY_THAT_DUSK_LOADS_ELIGIBLE_TPHD_CONTENT_FROM]"
                                   "<br/><br/>[CHANGES_REQUIRE_A_RESTART]");
+                    pane.add_button({
+                        .text = "[CLEAR_TPHD_FOLDER]",
+                        .isDisabled =
+                            [] {
+                                return prelaunch_state().configuredHdContentPath.empty();
+                            },
+                    }).on_pressed([] {
+                        clear_hd_content_path();
+                        mDoAud_seStartMenu(kSoundItemChange);
+                    });
+                });
+
+            leftPane.register_control(
+                leftPane.add_child<BoolButton>(BoolButton::Props{
+                    .key = "[ENABLE_TPHD]",
+                    .getValue = [] { return getSettings().backend.enableTphd.getValue(); },
+                    .setValue =
+                        [](bool value) {
+                            getSettings().backend.enableTphd.setValue(value);
+                            config::Save();
+                        },
+                    .isModified =
+                        [] {
+                            return getSettings().backend.enableTphd.getValue() !=
+                                   prelaunch_state().initialEnableTphd;
+                        },
+                }),
+                rightPane, [](Pane& pane) {
+                    pane.add_rml("[DISABLES_THE_EXPERIMENTAL_TPHD_HD_RESOURCE_LAYER_WHEN_OFF]"
+                                  "<br/><br/>[CHANGES_REQUIRE_A_RESTART]");
                 });
 
 #if DUSK_CAN_CHANGE_DATA_FOLDER

@@ -988,4 +988,7 @@
   <entry key="LANGUAGE_HD">语言HD</entry>
   <entry key="TPHD_CONTENT_FOLDER">黄昏公主HDcontent文件夹</entry>
   <entry key="SET_THE_DIRECTORY_THAT_DUSK_LOADS_ELIGIBLE_TPHD_CONTENT_FROM">设置黄昏公主HD加载内容的目录。</entry>
+  <entry key="CLEAR_TPHD_FOLDER">清除文件夹</entry>
+  <entry key="ENABLE_TPHD">黄昏公主HD高清资源</entry>
+  <entry key="DISABLES_THE_EXPERIMENTAL_TPHD_HD_RESOURCE_LAYER_WHEN_OFF">开关实验性的黄昏公主HD高清资源层。关闭后，无论是否设置了文件夹，都不会加载高清资源替换。</entry>
 </localization>
