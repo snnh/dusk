@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dusk/string.hpp"
+#include "helpers/string.hpp"
 
 namespace dusk::name_compat {
 
