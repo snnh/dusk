@@ -5,7 +5,7 @@
 
 #include "aurora/lib/logging.hpp"
 #include "d/actor/d_a_player.h"
-#include "dusk/endian.h"
+#include "helpers/endian.h"
 
 static aurora::Module LosLog("dusk::tphd::los");
 

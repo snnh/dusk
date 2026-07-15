@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "dusk/endian.h"
+#include "helpers/endian.h"
 #include "dusk/logging.h"
 
 static aurora::Module TphdLog("dusk::tphd");

@@ -23,7 +23,7 @@
 #include "JSystem/JKernel/JKRArchive.h"
 #include "JSystem/JKernel/JKRDecomp.h"
 #include "JSystem/JUtility/JUTTexture.h"
-#include "dusk/endian.h"
+#include "helpers/endian.h"
 #include "dusk/io.hpp"
 #include "dusk/logging.h"
 #include "AddrLib.hpp"

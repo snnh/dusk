@@ -8,7 +8,7 @@
 
 #include <dolphin/types.h>
 
-#include "dusk/endian.h"
+#include "helpers/endian.h"
 
 namespace dusk::tphd {
 
