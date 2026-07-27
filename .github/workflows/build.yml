@@ -308,7 +308,6 @@ jobs:
           path: |
             build/install/*.exe
             build/install/*.dll
-            build/install/*.symdb
             build/install/res/
             build/install/mods/
             build/install/debug.7z

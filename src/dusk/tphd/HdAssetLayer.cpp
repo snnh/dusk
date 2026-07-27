@@ -628,15 +628,26 @@ std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
     const auto* dataInfo = reinterpret_cast<const SArcDataInfo*>(arc.data() + kMetaBase);
 
     const u32 nodeCount   = dataInfo->num_nodes;
+    const u32 fileCount   = dataInfo->num_file_entries;
+    const u32 stringSize  = dataInfo->string_table_length;
     const size_t nodeTbl  = dataInfo->node_offset + kMetaBase;
     const size_t fileTbl  = dataInfo->file_entry_offset + kMetaBase;
     const size_t strTbl   = dataInfo->string_table_offset + kMetaBase;
     const size_t dataBase = kMetaBase + hdr->file_data_offset;
 
+    auto tableFits = [&](size_t offset, size_t count, size_t elementSize) {
+        return offset <= arc.size() && count <= (arc.size() - offset) / elementSize;
+    };
+    if (!tableFits(nodeTbl, nodeCount, sizeof(JKRArchive::SDIDirEntry)) ||
+        !tableFits(fileTbl, fileCount, sizeof(JKRArchive::SDIFileEntry)) ||
+        !tableFits(strTbl, stringSize, 1) || dataBase > arc.size()) {
+        return out;
+    }
+
     auto readStringAt = [&](u32 offset) -> std::string {
+        if (offset >= stringSize) return {};
         const u8* start = arc.data() + strTbl + offset;
-        const u8* bufferEnd = arc.data() + arc.size();
-        if (start >= bufferEnd) return {};
+        const u8* bufferEnd = arc.data() + strTbl + stringSize;
 
         const void* nul = std::memchr(start, 0,
                                       static_cast<size_t>(bufferEnd - start));
@@ -656,6 +667,7 @@ std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
         const u16 fc       = node.num_entries;
         const u32 firstIdx = node.first_file_index;
         const bool isRoot = (ni == 0);
+        if (firstIdx > fileCount || fc > fileCount - firstIdx) continue;
 
         for (u32 fi = 0; fi < fc; ++fi) {
             const auto& entry = files[firstIdx + fi];
@@ -665,14 +677,21 @@ std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
             if ((typeFlags & 0x03) != 0x01) continue;
 
             std::string fname = readStringAt(typeFlagsAndName & 0xFFFFFF);
-            if (fname == "." || fname == "..") continue;
+            if (fname.empty() || fname == "." || fname == "..") continue;
+
+            const u32 entryOffset = entry.data_offset;
+            const u32 entrySize = entry.data_size;
+            if (entryOffset > arc.size() - dataBase ||
+                entrySize > arc.size() - dataBase - entryOffset) {
+                continue;
+            }
 
             out.push_back({
                 (!isRoot && !dirName.empty())
                     ? dirName + "/" + fname
                     : std::move(fname),
-                static_cast<u32>(dataBase + entry.data_offset),
-                entry.data_size,
+                static_cast<u32>(dataBase + entryOffset),
+                entrySize,
             });
         }
     }

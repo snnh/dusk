@@ -107,7 +107,7 @@ typedef struct HostService {
 #include "mods/service.hpp"
 
 template <>
-struct dusk::mods::ServiceTraits<HostService> {
+struct mods::ServiceTraits<HostService> {
     static constexpr const char* id = HOST_SERVICE_ID;
     static constexpr uint16_t major_version = HOST_SERVICE_MAJOR;
     static constexpr uint16_t minor_version = HOST_SERVICE_MINOR;

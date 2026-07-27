@@ -47,6 +47,15 @@ target_link_libraries(dusklight_mod_feature_game INTERFACE
         dusklight_mod_api
         dusklight_game_abi_headers)
 target_compile_definitions(dusklight_mod_feature_game INTERFACE DUSK_MOD_FEATURE_GAME=1)
+# Game headers assume global.h comes first in the translation unit (it defines DUSK_GAME_DATA
+# and friends); force-include it so mods don't depend on include order.
+if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    target_compile_options(dusklight_mod_feature_game INTERFACE
+            "$<$<COMPILE_LANGUAGE:CXX>:/FIglobal.h>")
+else ()
+    target_compile_options(dusklight_mod_feature_game INTERFACE
+            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include global.h>")
+endif ()
 target_sources(dusklight_mod_feature_game INTERFACE
         ${_game_root}/sdk/src/game_feature.cpp)
 

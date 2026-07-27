@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string_view>
 #include <vector>
 
 // I can't believe it's 2026 and neither SDL (no error codes) nor
@@ -8,6 +9,14 @@
 // Here you go, this one's inspired by C#. I only wrote the functions I need.
 
 namespace dusk::io {
+
+/**
+ * Converts a UTF-8 string to a native filesystem path.
+ */
+inline std::filesystem::path fs_path_from_string(std::string_view utf8Path) {
+    return std::filesystem::path{std::u8string_view{
+        reinterpret_cast<const char8_t*>(utf8Path.data()), utf8Path.size()}};
+}
 
 /**
  * \brief A simple file stream wrapping cstdio FILE*.

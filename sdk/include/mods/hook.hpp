@@ -9,7 +9,7 @@
 #include <memory>
 #include <type_traits>
 
-namespace dusk::mods {
+namespace mods {
 
 template <class T>
 T arg(void* argsRaw, int n) noexcept {
@@ -133,7 +133,7 @@ struct NamedHook<Name, R(A...)> : HookImpl<detail::NameTag<Name>, R, A...> {};
  *   DEFINE_HOOK_SYMBOL("daAlink_hookshotAtHitCallBack",
  *       void(fopAc_ac_c*, dCcD_GObjInf*, fopAc_ac_c*, dCcD_GObjInf*), HookshotHit);
  *
- *   dusk::mods::hook_add_pre<LinkExecute>(svc_hook, on_link_execute);
+ *   mods::hook_add_pre<LinkExecute>(svc_hook, on_link_execute);
  *
  * DEFINE_HOOK_SYMBOL names may be the platform mangled name (dlopen convention, no Mach-O
  * leading underscore) or the demangled qualified display name; overloaded display names are
@@ -141,19 +141,18 @@ struct NamedHook<Name, R(A...)> : HookImpl<detail::NameTag<Name>, R, A...> {};
  */
 #define DEFINE_HOOK(target, alias)                                                                 \
     [[maybe_unused]] static const void* const mod_meta_hook_##alias =                              \
-        &::dusk::mods::detail::HookRecordFor<(target),                                             \
-            ::dusk::mods::FixedString{#target}>::Holder::record;                                   \
-    struct alias : ::dusk::mods::Hook<(target)> {                                                  \
+        &::mods::detail::HookRecordFor<(target), ::mods::FixedString{#target}>::Holder::record;    \
+    struct alias : ::mods::Hook<(target)> {                                                        \
         static void* resolved_target() {                                                           \
-            return ::dusk::mods::detail::HookRecordFor<(target),                                   \
-                ::dusk::mods::FixedString{#target}>::Holder::record.resolved;                      \
+            return ::mods::detail::HookRecordFor<(target),                                         \
+                ::mods::FixedString{#target}>::Holder::record.resolved;                            \
         }                                                                                          \
     }
 
 #define DEFINE_HOOK_SYMBOL(name, sig, alias)                                                       \
     MOD_META_RECORD static constinit auto mod_meta_hook_##alias =                                  \
-        ::dusk::mods::detail::make_hook_name_record<::dusk::mods::FixedString{name}>();            \
-    struct alias : ::dusk::mods::NamedHook<::dusk::mods::FixedString{name}, sig> {                 \
+        ::mods::detail::make_hook_name_record<::mods::FixedString{name}>();                        \
+    struct alias : ::mods::NamedHook<::mods::FixedString{name}, sig> {                             \
         static void* resolved_target() { return mod_meta_hook_##alias.resolved; }                  \
     }
 
@@ -208,4 +207,4 @@ ModResult hook_replace(
     return hooks->replace(mod_ctx, Entry::target, callback, options);
 }
 
-}  // namespace dusk::mods
+}  // namespace mods

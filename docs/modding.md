@@ -28,7 +28,8 @@ function, read and write data fields, and hook the vast majority of game functio
 
 ## Getting Started
 
-Fork the [mod template](../mods/template_mod/), a self-contained CMake project that uses the Dusklight mod SDK.
+Fork the [mod template](https://github.com/TwilitRealm/mod-template), a self-contained CMake project that uses the
+Dusklight mod SDK.
 
 ```
 my_mod/
@@ -43,19 +44,22 @@ my_mod/
 **CMakeLists.txt:**
 
 ```cmake
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.26)
 project(my_mod CXX)
 
-set(DUSKLIGHT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dusklight" CACHE PATH "Path to dusklight source root")
+if (NOT DUSKLIGHT_VERSION)
+  set(DUSKLIGHT_VERSION "76b56cd8b81809fce0a5c2a44e2f6d437591132f")
+endif ()
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FetchDusklight.cmake")
 add_subdirectory("${DUSKLIGHT_DIR}/sdk" dusklight-sdk EXCLUDE_FROM_ALL)
 
 add_mod(my_mod
-        FEATURES game          # optional
+        FEATURES game          # remove for service/asset-only mods; add webgpu for GfxService
         SOURCES src/mod.cpp
         MOD_JSON mod.json
-        RES_DIR res            # optional
-        OVERLAY_DIR overlay    # optional
-        TEXTURES_DIR textures  # optional
+        RES_DIR res            # mod resources, including icon.png and banner.png
+        OVERLAY_DIR overlay    # game file overlays; remove if unused
+        TEXTURES_DIR textures  # texture replacements; remove if unused
 )
 ```
 
@@ -65,11 +69,7 @@ Available features:
 - `webgpu`: Allows importing the WebGPU API (`webgpu/webgpu.h`). Must be enabled when using
   [GfxService](#gfxservice-modssvcgfxh).
 
-Building produces `my_mod.dusk` in `build/<preset>/mods/` (configurable via the `DUSK_MODS_OUTPUT_DIR` cache variable).
-Dusklight searches a `mods/` directory next to the app in addition to the user directory, so a dev build launched from
-`build/<preset>/` picks these up automatically: rebuild, relaunch (or click Reload), done.
-
-For a regular game install, copy the `.dusk` into the user mods folder:
+Building produces `my_mod.dusk` in `build/mods/`. Copy the `.dusk` into the user mods folder:
 
 - Windows: `%APPDATA%\TwilitRealm\Dusklight\mods`
 - Linux: `~/.local/share/TwilitRealm/Dusklight/mods`
@@ -498,14 +498,14 @@ Run before the original. Return `HOOK_SKIP_ORIGINAL` to cancel it (post-hooks st
 
 ```cpp
 HookAction on_pos_move_pre(ModContext*, void* args, void* retval, void* userdata) {
-    daAlink_c* link = dusk::mods::arg<daAlink_c*>(args, 0);  // arg 0 is `this`
+    daAlink_c* link = mods::arg<daAlink_c*>(args, 0);  // arg 0 is `this`
     if (link->shape_angle.y > 10000) {
         return HOOK_SKIP_ORIGINAL;
     }
     return HOOK_CONTINUE;
 }
 
-dusk::mods::hook_add_pre<LinkPosMove>(svc_hook, on_pos_move_pre);
+mods::hook_add_pre<LinkPosMove>(svc_hook, on_pos_move_pre);
 ```
 
 ### Post-hooks
@@ -516,7 +516,7 @@ if any.
 ```cpp
 void on_pos_move_post(ModContext*, void* args, void* retval, void* userdata) { ... }
 
-dusk::mods::hook_add_post<LinkPosMove>(svc_hook, on_pos_move_post);
+mods::hook_add_post<LinkPosMove>(svc_hook, on_pos_move_post);
 ```
 
 ### Replace-hooks
@@ -525,13 +525,13 @@ Substitute the original entirely. Call through to it via the declaration's `g_or
 
 ```cpp
 void on_execute_replace(ModContext*, void* args, void* retval, void*) {
-    int result = LinkExecute::g_orig(dusk::mods::arg<daAlink_c*>(args, 0));
+    int result = LinkExecute::g_orig(mods::arg<daAlink_c*>(args, 0));
     if (retval != nullptr) {
         *static_cast<int*>(retval) = result;
     }
 }
 
-dusk::mods::hook_replace<LinkExecute>(svc_hook, on_execute_replace);
+mods::hook_replace<LinkExecute>(svc_hook, on_execute_replace);
 ```
 
 By default a second replace-hook on the same function is a conflict; `HookOptions` (`replace_policy`, `priority`,
@@ -547,7 +547,7 @@ symbol name instead. You must supply the signature along with the name.
 DEFINE_HOOK_SYMBOL("daAlink_hookshotAtHitCallBack",
     void(fopAc_ac_c*, dCcD_GObjInf*, fopAc_ac_c*, dCcD_GObjInf*), HookshotHit);
 
-dusk::mods::hook_add_pre<HookshotHit>(svc_hook, on_hookshot_hit_pre);
+mods::hook_add_pre<HookshotHit>(svc_hook, on_hookshot_hit_pre);
 ...
 HookshotHit::g_orig(link, atObjInf, target, tgObjInf);  // call through to the original
 ```
@@ -571,8 +571,8 @@ call.
 declaration order.
 
 ```cpp
-T  value = dusk::mods::arg<T>(args, n);      // copy
-T& ref   = dusk::mods::arg_ref<T>(args, n);  // read/write reference
+T  value = mods::arg<T>(args, n);      // copy
+T& ref   = mods::arg_ref<T>(args, n);  // read/write reference
 ```
 
 ```cpp
@@ -580,14 +580,14 @@ DEFINE_HOOK(fopAcM_createItem, CreateItem);
 
 // fpc_ProcID fopAcM_createItem(..., int itemNo, ...): turn heart drops into green rupees
 HookAction on_create_item_pre(ModContext*, void* args, void*, void*) {
-    int& itemNo = dusk::mods::arg_ref<int>(args, 1);
+    int& itemNo = mods::arg_ref<int>(args, 1);
     if (itemNo == dItemNo_HEART_e) {
         itemNo = dItemNo_GREEN_RUPEE_e;
     }
     return HOOK_CONTINUE;
 }
 
-dusk::mods::hook_add_pre<CreateItem>(svc_hook, on_create_item_pre);
+mods::hook_add_pre<CreateItem>(svc_hook, on_create_item_pre);
 ```
 
 For reference parameters (e.g. `const cXyz& pos`), `arg_ref<cXyz>` yields a direct reference.
@@ -646,13 +646,13 @@ the stack for the whole session (e.g. the outermost main loop); a mod that does 
 
 Service calls report failure through `ModResult` return values (`MOD_OK`, `MOD_UNAVAILABLE`,
 `MOD_INVALID_ARGUMENT`, ...). Lifecycle exports additionally receive a `ModError*`: fill it (e.g. with
-`dusk::mods::set_error(error, code, "message")`) and return the code, and the loader disables the mod and shows the
+`mods::set_error(error, code, "message")`) and return the code, and the loader disables the mod and shows the
 message to the user.
 
 ```cpp
 MOD_EXPORT ModResult mod_initialize(ModError* error) {
     if (!load_my_data()) {
-        return dusk::mods::set_error(error, MOD_ERROR, "failed to load data");
+        return mods::set_error(error, MOD_ERROR, "failed to load data");
     }
     return MOD_OK;
 }
@@ -686,7 +686,7 @@ typedef struct MyModService {
 #ifdef __cplusplus
 #include "mods/service.hpp"
 template <>
-struct dusk::mods::ServiceTraits<MyModService> {
+struct mods::ServiceTraits<MyModService> {
     static constexpr const char* id = MY_MOD_SERVICE_ID;
     static constexpr uint16_t major_version = MY_MOD_SERVICE_MAJOR;
     static constexpr uint16_t minor_version = MY_MOD_SERVICE_MINOR;

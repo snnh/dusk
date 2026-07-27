@@ -1,7 +1,9 @@
 #include "dusk/settings.h"
 #include "dusk/config.hpp"
+#include "dusk/io.hpp"
 #include "dusk/main.h"
 
+#include <cstdlib>
 #include <system_error>
 #include <aurora/aurora.h>
 
@@ -224,22 +226,39 @@ UserSettings& getSettings() {
 
 std::filesystem::path tphd_content_path() {
 #if DUSK_TPHD
+    if (const char* disabled = std::getenv("DUSK_DISABLE_TPHD");
+        disabled != nullptr && std::string_view{disabled} == "1") {
+        return {};
+    }
+
     // Master switch: when TPHD is disabled, hide the HD content path entirely so
     // that tphd_active() and every consumer behave as if no HD layer exists.
     if (!g_userSettings.backend.enableTphd) {
         return {};
     }
-    const std::string& hdPath = g_userSettings.backend.hdContentPath;
-    if (!hdPath.empty()) {
-        return hdPath;
+    std::filesystem::path contentPath;
+    const std::string& configuredPath = g_userSettings.backend.hdContentPath;
+    if (!configuredPath.empty()) {
+        contentPath = io::fs_path_from_string(configuredPath);
+    } else if (!ConfigPath.empty()) {
+        contentPath = ConfigPath / "tphd" / "content";
     }
 
-    if (!ConfigPath.empty()) {
+    struct ValidationCache {
+        std::filesystem::path path;
+        bool valid = false;
+    };
+    static ValidationCache cache;
+    if (contentPath != cache.path) {
+        cache.path = contentPath;
         std::error_code ec;
-        auto localPath = ConfigPath / "tphd" / "content";
-        if (std::filesystem::is_directory(localPath, ec)) {
-            return localPath;
-        }
+        cache.valid = std::filesystem::is_regular_file(
+                          contentPath / "res" / "Object" / "Title.arc", ec) &&
+                      std::filesystem::is_regular_file(
+                          contentPath / "res" / "Particle" / "common-r.jpc", ec);
+    }
+    if (cache.valid) {
+        return contentPath;
     }
 #endif
     return {};

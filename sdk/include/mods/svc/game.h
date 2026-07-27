@@ -23,7 +23,7 @@ typedef struct GameService {
 #include <mods/service.hpp>
 
 template <>
-struct dusk::mods::ServiceTraits<GameService> {
+struct mods::ServiceTraits<GameService> {
     static constexpr const char* id = GAME_SERVICE_ID;
     static constexpr uint16_t major_version = GAME_SERVICE_MAJOR;
     static constexpr uint16_t minor_version = GAME_SERVICE_MINOR;

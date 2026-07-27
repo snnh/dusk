@@ -457,10 +457,7 @@ static int ReadChannelSamplesChunk(
 
     auto aramBase = static_cast<u8*>(ARGetStorageAddress()) + channel.mWaveAramAddress;
 
-    // Streaming logic directly modifies mSamplesLeft.
-    // So we use that as our tracking of where we are.
-    auto curSamplePosition = channel.mEndSample - channel.mSamplesLeft;
-
+    auto curSamplePosition = channel.mSamplePosition;
     u32 skipSamples = curSamplePosition % channel.mSamplesPerBlock;
     if (skipSamples != 0) {
         // We need to start reading in the middle of a block. This can happen thanks to loops.

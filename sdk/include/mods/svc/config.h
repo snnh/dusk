@@ -100,7 +100,7 @@ typedef struct ConfigService {
 #include "mods/service.hpp"
 
 template <>
-struct dusk::mods::ServiceTraits<ConfigService> {
+struct mods::ServiceTraits<ConfigService> {
     static constexpr const char* id = CONFIG_SERVICE_ID;
     static constexpr uint16_t major_version = CONFIG_SERVICE_MAJOR;
     static constexpr uint16_t minor_version = CONFIG_SERVICE_MINOR;

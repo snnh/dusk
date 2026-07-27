@@ -19,9 +19,6 @@ for install_path in build/install/*; do
   [[ "$(basename "$install_path")" == *.* ]] && continue
   cp -r "$install_path" build/appdir/usr/bin
 done
-if [[ -f build/install/dusklight.symdb ]]; then
-  cp build/install/dusklight.symdb build/appdir/usr/bin
-fi
 cp -r platforms/freedesktop/{16x16,32x32,48x48,64x64,128x128,256x256,512x512,1024x1024} build/appdir/usr/share/icons/hicolor
 cp platforms/freedesktop/dev.twilitrealm.dusk.desktop build/appdir/usr/share/applications
 

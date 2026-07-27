@@ -46,7 +46,7 @@ typedef enum HookReplacePolicy {
 /*
  * Hook callbacks. `args` is an array of pointers to the call's arguments (index 0 is `this`
  * for member functions); `retval` points at the return slot (NULL for void). Read and write
- * them through dusk::mods::arg<T> / arg_ref<T> from mods/hook.hpp. `userdata` is the pointer
+ * them through mods::arg<T> / arg_ref<T> from mods/hook.hpp. `userdata` is the pointer
  * from HookOptions. All run on the game thread, in the hooked call's own stack frame.
  */
 typedef HookAction (*HookPreFn)(ModContext* ctx, void* args, void* retval, void* userdata);
@@ -118,7 +118,7 @@ typedef struct HookService {
 #include "mods/service.hpp"
 
 template <>
-struct dusk::mods::ServiceTraits<HookService> {
+struct mods::ServiceTraits<HookService> {
     static constexpr const char* id = HOOK_SERVICE_ID;
     static constexpr uint16_t major_version = HOOK_SERVICE_MAJOR;
     static constexpr uint16_t minor_version = HOOK_SERVICE_MINOR;

@@ -57,7 +57,7 @@ typedef struct CameraService {
 #include "mods/service.hpp"
 
 template <>
-struct dusk::mods::ServiceTraits<CameraService> {
+struct mods::ServiceTraits<CameraService> {
     static constexpr const char* id = CAMERA_SERVICE_ID;
     static constexpr uint16_t major_version = CAMERA_SERVICE_MAJOR;
     static constexpr uint16_t minor_version = CAMERA_SERVICE_MINOR;

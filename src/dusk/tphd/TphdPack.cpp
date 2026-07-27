@@ -2,37 +2,22 @@
 
 #include <zlib.h>
 
-#include <cstdio>
 #include <cstring>
+#include <exception>
+#include <limits>
 
 #include "helpers/endian.h"
+#include "dusk/io.hpp"
 #include "dusk/logging.h"
 
 static aurora::Module TphdLog("dusk::tphd");
 
 namespace dusk::tphd {
 
-namespace {
-
-std::optional<std::vector<u8>> readFile(const std::filesystem::path& path) {
-    std::FILE* f = std::fopen(path.string().c_str(), "rb");
-    if (!f) return std::nullopt;
-    std::fseek(f, 0, SEEK_END);
-    long len = std::ftell(f);
-    std::fseek(f, 0, SEEK_SET);
-    if (len < 0) { std::fclose(f); return std::nullopt; }
-    std::vector<u8> buf(static_cast<size_t>(len));
-    size_t got = std::fread(buf.data(), 1, buf.size(), f);
-    std::fclose(f);
-    if (got != buf.size()) return std::nullopt;
-    return buf;
-}
-
-}
-
 std::optional<std::vector<u8>> decompressGzip(std::span<const u8> in) {
     if (in.size() < 18) return std::nullopt;
     if (in[0] != 0x1F || in[1] != 0x8B) return std::nullopt;
+    if (in.size() > std::numeric_limits<uInt>::max()) return std::nullopt;
 
     u32 isize;
     std::memcpy(&isize, in.data() + in.size() - 4, sizeof(isize));
@@ -47,7 +32,7 @@ std::optional<std::vector<u8>> decompressGzip(std::span<const u8> in) {
     if (inflateInit2(&strm, 15 + 16) != Z_OK) return std::nullopt;
     int rc = inflate(&strm, Z_FINISH);
     inflateEnd(&strm);
-    if (rc != Z_STREAM_END) return std::nullopt;
+    if (rc != Z_STREAM_END || strm.total_out != out.size()) return std::nullopt;
     return out;
 }
 
@@ -59,7 +44,7 @@ std::vector<TmpkEntry> parseTmpk(std::span<const u8> in) {
     if (std::memcmp(hdr->magic, "TMPK", 4) != 0) return out;
 
     const u32 count = hdr->count;
-    if (in.size() < sizeof(TmpkRawHeader) + count * sizeof(TmpkRawEntry)) return out;
+    if (count > (in.size() - sizeof(TmpkRawHeader)) / sizeof(TmpkRawEntry)) return out;
 
     const auto* entries = reinterpret_cast<const TmpkRawEntry*>(
         in.data() + sizeof(TmpkRawHeader));
@@ -71,7 +56,10 @@ std::vector<TmpkEntry> parseTmpk(std::span<const u8> in) {
         const u32 dataSize = entries[i].dataSize;
         const u32 flags    = entries[i].flags;
 
-        if (nameOff >= in.size() || dataOff + dataSize > in.size()) continue;
+        if (nameOff >= in.size() || dataOff > in.size() ||
+            dataSize > in.size() - dataOff) {
+            continue;
+        }
 
         const char* nameStart = reinterpret_cast<const char*>(in.data() + nameOff);
         size_t maxLen = in.size() - nameOff;
@@ -102,12 +90,12 @@ std::optional<TphdPack> TphdPack::loadFromMemory(std::span<const u8> gzipBytes) 
 }
 
 std::optional<TphdPack> TphdPack::loadFromFile(const std::filesystem::path& path) {
-    auto raw = readFile(path);
-    if (!raw) {
-        TphdLog.error("Failed to read {}", path.string());
+    try {
+        return loadFromMemory(io::FileStream::ReadAllBytes(path));
+    } catch (const std::exception& e) {
+        TphdLog.error("Failed to read {}: {}", io::fs_path_to_string(path), e.what());
         return std::nullopt;
     }
-    return loadFromMemory(*raw);
 }
 
 const TmpkEntry* TphdPack::find(std::string_view name) const {

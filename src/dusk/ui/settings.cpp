@@ -666,11 +666,15 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             const u8 idx = static_cast<u8>(getSettings().game.language.getValue());
 
                             if (dusk::tphd_active()) {
-                                if (state.configuredDiscInfo.isPal) {
+                                if (state.configuredDiscInfo.region == iso::Region::Europe) {
                                     return kLanguageNamesEU[idx];
                                 } else {
                                     return kLanguageNamesUS[idx];
                                 }
+                            }
+
+                            if (state.configuredDiscInfo.region != iso::Region::Europe) {
+                                return kLanguageNames[0];
                             }
 
                             return kLanguageNames[idx];
@@ -679,7 +683,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                         [] {
                             const auto& state = prelaunch_state();
                             return !state.configuredDiscCanLaunch ||
-                                   (!state.configuredDiscInfo.isPal && !dusk::tphd_active());
+                                   (state.configuredDiscInfo.region != iso::Region::Europe &&
+                                    !dusk::tphd_active());
                         },
                     .isModified =
                         [] {

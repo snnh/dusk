@@ -206,7 +206,7 @@ typedef struct GfxService {
 #include "mods/service.hpp"
 
 template <>
-struct dusk::mods::ServiceTraits<GfxService> {
+struct mods::ServiceTraits<GfxService> {
     static constexpr const char* id = GFX_SERVICE_ID;
     static constexpr uint16_t major_version = GFX_SERVICE_MAJOR;
     static constexpr uint16_t minor_version = GFX_SERVICE_MINOR;

@@ -7,7 +7,8 @@
 #   add_subdirectory(<dusk>/sdk dusk-sdk EXCLUDE_FROM_ALL)
 #   add_mod(my_mod FEATURES game webgpu SOURCES ... MOD_JSON mod.json)
 #
-# TODO: auto-download link targets from tag
+# On platforms where mods link against the game binary (Windows/Apple/Android), a
+# version-independent link stub is downloaded automatically unless DUSK_GAME_EXE is set.
 
 cmake_minimum_required(VERSION 3.25)
 

@@ -45,7 +45,7 @@ typedef struct ResourceService {
 #include "mods/service.hpp"
 
 template <>
-struct dusk::mods::ServiceTraits<ResourceService> {
+struct mods::ServiceTraits<ResourceService> {
     static constexpr const char* id = RESOURCE_SERVICE_ID;
     static constexpr uint16_t major_version = RESOURCE_SERVICE_MAJOR;
     static constexpr uint16_t minor_version = RESOURCE_SERVICE_MINOR;
