@@ -15,6 +15,12 @@ namespace dusk::tphd {
 // disables HD overrides.
 void set_hd_content_path(std::filesystem::path contentPath);
 
+// Cheap, fail-closed validation used before the HD layer can redirect a game
+// archive.  A corrupt override must leave the original GameCube resource in
+// place rather than reaching JKRMemArchive's unchecked parser.
+bool is_valid_hd_rarc_file(const std::filesystem::path& path);
+bool is_valid_hd_jpc_file(const std::filesystem::path& path);
+
 // Returns a pointer to cached HD archive bytes for packed sub-archives that
 // are mounted from an already-loaded RARC rather than through the DVD layer.
 // Caller must not outlive the next setHdContentPath() call.

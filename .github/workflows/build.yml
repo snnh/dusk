@@ -1,6 +1,8 @@
 name: Build
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
     inputs:
       tag_name:
@@ -66,9 +68,6 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Patch Aurora
-        run: git -C extern/aurora apply ../../ci/patches/aurora-rmlui-translate-callback.patch
-
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -128,9 +127,6 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Patch Aurora
-        run: git -C extern/aurora apply ../../ci/patches/aurora-rmlui-translate-callback.patch
-
       - name: Install dependencies
         run: brew install cmake ninja
 
@@ -186,9 +182,6 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-
-      - name: Patch Aurora
-        run: git -C extern/aurora apply ../../ci/patches/aurora-rmlui-translate-callback.patch
 
       - name: Install dependencies
         run: |
@@ -275,9 +268,6 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Patch Aurora
-        run: git -C extern/aurora apply ../../ci/patches/aurora-rmlui-translate-callback.patch
-
       - name: Enable Visual Studio environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -362,7 +352,16 @@ jobs:
               if [[ "$artifact_name" != *-android-* && "$artifact_name" != *-ios-* && "$artifact_name" != *-tvos-* ]]; then
                 portable_dir="$(mktemp -d)"
                 cp -a "$artifact_dir"/. "$portable_dir"/
-                : > "$portable_dir/portable.txt"
+                portable_marker="$portable_dir/portable.txt"
+                if [[ "$artifact_name" == *-macos-* ]]; then
+                  portable_app="$(find "$portable_dir" -maxdepth 1 -type d -name '*.app' -print -quit)"
+                  if [[ -z "$portable_app" ]]; then
+                    echo "macOS artifact '$artifact_name' does not contain an app bundle" >&2
+                    exit 1
+                  fi
+                  portable_marker="$portable_app/Contents/Resources/portable.txt"
+                fi
+                : > "$portable_marker"
                 tar -C "$portable_dir" -czf "release-assets/${artifact_name}-portable.tar.gz" .
                 rm -rf "$portable_dir"
               fi

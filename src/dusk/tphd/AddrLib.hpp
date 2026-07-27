@@ -12,6 +12,7 @@
 #ifndef DUSK_TPHD_ADDRLIB_HPP
 #define DUSK_TPHD_ADDRLIB_HPP
 
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -50,7 +51,8 @@ struct SurfaceDesc {
 };
 
 // Deswizzle a single surface mip level into a row-major linear buffer.
-std::vector<u8> deswizzle(const SurfaceDesc& desc, std::span<const u8> tiledBytes);
+std::optional<std::vector<u8>> deswizzle(const SurfaceDesc& desc,
+                                          std::span<const u8> tiledBytes);
 
 struct SurfaceInfoIn {
     u32 width;        // pixels at mip 0 (caller supplies surface base dims)

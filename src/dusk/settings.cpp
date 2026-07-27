@@ -2,9 +2,9 @@
 #include "dusk/config.hpp"
 #include "dusk/io.hpp"
 #include "dusk/main.h"
+#include "dusk/tphd/HdAssetLayer.hpp"
 
 #include <cstdlib>
-#include <system_error>
 #include <aurora/aurora.h>
 
 namespace dusk {
@@ -251,11 +251,10 @@ std::filesystem::path tphd_content_path() {
     static ValidationCache cache;
     if (contentPath != cache.path) {
         cache.path = contentPath;
-        std::error_code ec;
-        cache.valid = std::filesystem::is_regular_file(
-                          contentPath / "res" / "Object" / "Title.arc", ec) &&
-                      std::filesystem::is_regular_file(
-                          contentPath / "res" / "Particle" / "common-r.jpc", ec);
+        cache.valid = tphd::is_valid_hd_rarc_file(
+                          contentPath / "res" / "Object" / "Title.arc") &&
+                      tphd::is_valid_hd_jpc_file(
+                          contentPath / "res" / "Particle" / "common-r.jpc");
     }
     if (cache.valid) {
         return contentPath;

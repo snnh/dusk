@@ -2229,7 +2229,15 @@ void mDoExt_invJntPacket::draw() {
 #if DUSK_TPHD
             {
                 const auto* offs = sp18->getMaterial()->getPEBlock()->getPolygonOffset();
-                GX2SetPolygonOffset(offs->mFrontOffset, offs->mFrontScale, offs->mBackOffset, offs->mBackScale, offs->mClamp);
+                if (offs != NULL) {
+                    GX2SetPolygonOffset(
+                        offs->mFrontOffset, offs->mFrontScale, offs->mBackOffset,
+                        offs->mBackScale, offs->mClamp);
+                } else {
+                    // Non-Full PE blocks have no stored polygon offset. Reset the state left
+                    // by the preceding material instead of dereferencing their null default.
+                    GX2SetPolygonOffset(0.0f, 0.0f, 0.0f, 0.0f, 0);
+                }
             }
 #endif
 

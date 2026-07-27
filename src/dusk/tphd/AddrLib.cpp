@@ -41,6 +41,9 @@
 #include <algorithm>
 #include <cstring>
 #include <bit>
+#include <limits>
+#include <new>
+#include <stdexcept>
 
 namespace dusk::tphd::addrlib {
 
@@ -61,9 +64,18 @@ static constexpr u32 kMicroTileWidth     = 8;
 static constexpr u32 kMicroTileHeight    = 8;
 static constexpr u32 kMicroTilePixels    = kMicroTileWidth * kMicroTileHeight;
 static constexpr u32 kThickTileThickness = 4;
+static constexpr u32 kMaxSurfaceDimension = 16384;
+static constexpr size_t kMaxDecodedTextureBytes = 256u * 1024u * 1024u;
 
 static constexpr u32 BITS_TO_BYTES(u32 v) { return (v + 7) / 8; }
+static constexpr u64 BITS_TO_BYTES_64(u64 v) { return (v + 7) / 8; }
 static constexpr u32 _BIT(u32 v, u32 b) { return (v >> b) & 1; }
+
+static bool checked_mul(size_t a, size_t b, size_t& out) {
+    if (a != 0 && b > std::numeric_limits<size_t>::max() / a) return false;
+    out = a * b;
+    return true;
+}
 
 static u32 Log2(u32 v) {
     u32 r = 0;
@@ -75,7 +87,7 @@ static constexpr bool IsPow2(u32 v) { return v != 0 && (v & (v - 1)) == 0; }
 
 
 static constexpr u32 NextPow2(u32 v) {
-    return v <= 1 ? 1u : std::bit_ceil(v);
+    return v <= 1 ? 1u : (v > (1u << 31) ? 0u : std::bit_ceil(v));
 }
 static constexpr u32 PowTwoAlign(u32 v, u32 align) {
     return (v + align - 1) & ~(align - 1);
@@ -267,8 +279,8 @@ static u64 ComputeSurfaceAddrFromCoordMicroTiled(u32 x, u32 y, u32 slice,
                                                  u32 bpp, u32 pitch, u32 height,
                                                  TileMode tm, bool isDepth) {
     const u64 microTileThickness = (tm == TileMode::Tiled1DThick) ? 4u : 1u;
-    const u64 microTileBytes =
-        BITS_TO_BYTES(static_cast<u32>(kMicroTilePixels * microTileThickness * bpp));
+    const u64 microTileBytes = BITS_TO_BYTES_64(
+        static_cast<u64>(kMicroTilePixels) * microTileThickness * bpp);
     const u64 microTilesPerRow = pitch / kMicroTileWidth;
     const u64 microTileIndexX = x / kMicroTileWidth;
     const u64 microTileIndexY = y / kMicroTileHeight;
@@ -276,8 +288,8 @@ static u64 ComputeSurfaceAddrFromCoordMicroTiled(u32 x, u32 y, u32 slice,
 
     const u64 microTileOffset = microTileBytes *
         (microTileIndexX + microTileIndexY * microTilesPerRow);
-    const u64 sliceBytes =
-        BITS_TO_BYTES(static_cast<u32>(pitch * height * microTileThickness * bpp));
+    const u64 sliceBytes = BITS_TO_BYTES_64(
+        static_cast<u64>(pitch) * height * microTileThickness * bpp);
     const u64 sliceOffset = microTileIndexZ * sliceBytes;
     const u64 pixelIndex =
         ComputePixelIndexWithinMicroTile(x, y, slice, bpp, tm, GetTileType(isDepth));
@@ -341,8 +353,8 @@ static u64 ComputeSurfaceAddrFromCoordMacroTiled(u32 x, u32 y, u32 slice, u32 sa
     pipe = bankPipe % numPipes;
     bank = bankPipe / numPipes;
 
-    const u64 sliceBytes =
-        BITS_TO_BYTES(static_cast<u32>(pitch * height * microTileThickness * bpp * numSamples));
+    const u64 sliceBytes = BITS_TO_BYTES_64(
+        static_cast<u64>(pitch) * height * microTileThickness * bpp * numSamples);
     const u64 sliceOffset = sliceBytes *
         ((sampleSlice + numSampleSplits * slice) / microTileThickness);
 
@@ -363,9 +375,9 @@ static u64 ComputeSurfaceAddrFromCoordMacroTiled(u32 x, u32 y, u32 slice, u32 sa
         break;
     }
     const u64 macroTilesPerRow = pitch / macroTilePitch;
-    const u64 macroTileBytes =
-        BITS_TO_BYTES(static_cast<u32>(numSamples * microTileThickness * bpp *
-                                       macroTileHeight * macroTilePitch));
+    const u64 macroTileBytes = BITS_TO_BYTES_64(
+        static_cast<u64>(numSamples) * microTileThickness * bpp *
+        macroTileHeight * macroTilePitch);
     const u64 macroTileIndexX = x / macroTilePitch;
     const u64 macroTileIndexY = y / macroTileHeight;
     const u64 macroTileOffset = macroTileBytes *
@@ -392,15 +404,44 @@ static u64 ComputeSurfaceAddrFromCoordMacroTiled(u32 x, u32 y, u32 slice, u32 sa
 
 // ---- High-level deswizzle -------------------------------------------------
 
-std::vector<u8> deswizzle(const SurfaceDesc& desc, std::span<const u8> tiledBytes) {
+std::optional<std::vector<u8>> deswizzle(const SurfaceDesc& desc,
+                                          std::span<const u8> tiledBytes) {
     // For BCN formats addrlib operates on block coordinates; bpp is bits per
     // 4x4 block (e.g. 64 for BC1). Reduce width/height to block extents.
+    if (desc.width == 0 || desc.width > kMaxSurfaceDimension ||
+        desc.height == 0 || desc.height > kMaxSurfaceDimension ||
+        desc.pitch == 0 || desc.pitch > kMaxSurfaceDimension ||
+        desc.bpp == 0 || desc.bpp > 128 || desc.bpp % 8 != 0 ||
+        static_cast<u32>(desc.tileMode) > static_cast<u32>(TileMode::Tiled3BThick) ||
+        tiledBytes.size() > kMaxDecodedTextureBytes) {
+        return std::nullopt;
+    }
     const u32 blockWidth  = desc.isBcn ? (desc.width  + 3) / 4 : desc.width;
     const u32 blockHeight = desc.isBcn ? (desc.height + 3) / 4 : desc.height;
+    if (blockWidth == 0 || blockHeight == 0 || desc.pitch < blockWidth) {
+        return std::nullopt;
+    }
 
     const u32 bytesPerElement = desc.bpp / 8;
-    const u32 linearStride = blockWidth * bytesPerElement;
-    std::vector<u8> linear(static_cast<size_t>(linearStride) * blockHeight, 0);
+    size_t linearStride = 0;
+    size_t linearBytes = 0;
+    size_t minTiledBytes = 0;
+    if (!checked_mul(blockWidth, bytesPerElement, linearStride) ||
+        !checked_mul(linearStride, blockHeight, linearBytes) ||
+        !checked_mul(desc.pitch, bytesPerElement, minTiledBytes) ||
+        !checked_mul(minTiledBytes, blockHeight, minTiledBytes) ||
+        linearBytes > kMaxDecodedTextureBytes || minTiledBytes > tiledBytes.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<u8> linear;
+    try {
+        linear.assign(linearBytes, 0);
+    } catch (const std::bad_alloc&) {
+        return std::nullopt;
+    } catch (const std::length_error&) {
+        return std::nullopt;
+    }
 
     const u32 pipeSwizzle = (desc.swizzle >> 8) & 1;
     const u32 bankSwizzle = (desc.swizzle >> 9) & 3;
@@ -409,8 +450,7 @@ std::vector<u8> deswizzle(const SurfaceDesc& desc, std::span<const u8> tiledByte
     if (desc.tileMode == TileMode::LinearGeneral ||
         desc.tileMode == TileMode::LinearAligned) {
         for (u32 y = 0; y < blockHeight; ++y) {
-            const u32 srcOff = y * desc.pitch * bytesPerElement;
-            if (srcOff + linearStride > tiledBytes.size()) break;
+            const size_t srcOff = static_cast<size_t>(y) * desc.pitch * bytesPerElement;
             std::memcpy(linear.data() + y * linearStride,
                         tiledBytes.data() + srcOff, linearStride);
         }
@@ -434,8 +474,8 @@ std::vector<u8> deswizzle(const SurfaceDesc& desc, std::span<const u8> tiledByte
                     blockHeight, /*numSamples*/ 1, desc.tileMode, desc.isDepth,
                     pipeSwizzle, bankSwizzle);
             }
-            if (srcOff + bytesPerElement > tiledBytes.size()) continue;
-            const u32 dstOff = (y * blockWidth + x) * bytesPerElement;
+            if (srcOff > tiledBytes.size() - bytesPerElement) return std::nullopt;
+            const size_t dstOff = (static_cast<size_t>(y) * blockWidth + x) * bytesPerElement;
             std::memcpy(linear.data() + dstOff,
                         tiledBytes.data() + srcOff, bytesPerElement);
         }
@@ -637,6 +677,13 @@ static void ComputeSurfaceInfoMacroTiled(u32 width, u32 height, u32 numSamples, 
 }
 
 void computeSurfaceInfo(const SurfaceInfoIn& in, SurfaceInfoOut& out) {
+    out = {};
+    if (in.width == 0 || in.width > kMaxSurfaceDimension ||
+        in.height == 0 || in.height > kMaxSurfaceDimension ||
+        in.bpp == 0 || in.bpp > 128 || in.mipLevel >= 13 ||
+        static_cast<u32>(in.tileMode) > static_cast<u32>(TileMode::Tiled3BThick)) {
+        return;
+    }
     // AddrLib::ComputeMipLevel + R600AddrLib::HwlComputeMipLevel: align BCN
     // base dims to 4 pixels; for mipLevel>0, reduce dims and NextPow2 them.
     u32 width  = in.width;

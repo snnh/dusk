@@ -3,11 +3,15 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <list>
+#include <limits>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <unordered_map>
@@ -21,7 +25,6 @@
 
 #include "JSystem/J3DGraphLoader/J3DModelLoader.h"
 #include "JSystem/JKernel/JKRArchive.h"
-#include "JSystem/JKernel/JKRDecomp.h"
 #include "JSystem/JUtility/JUTTexture.h"
 #include "helpers/endian.h"
 #include "dusk/io.hpp"
@@ -38,13 +41,22 @@ namespace dusk::tphd {
 
 namespace {
 
+constexpr size_t kMaxHdArchiveBytes = 512u * 1024u * 1024u;
+constexpr size_t kMaxDecodedTextureBytes = 256u * 1024u * 1024u;
+
 std::filesystem::path g_contentPath;
+uint64_t g_contentGeneration = 0;
 std::mutex g_cacheMutex;
 
 // Heap-allocated, never freed — these must outlive g_dComIfG_gameInfo's
 // static destructor which holds JKRArchives referencing these bytes.
 std::list<std::vector<u8>>& g_mountBuffers() {
     static auto* p = new std::list<std::vector<u8>>{};
+    return *p;
+}
+
+std::unordered_map<std::string, std::vector<u8>*>& g_mountBuffersByPath() {
+    static auto* p = new std::unordered_map<std::string, std::vector<u8>*>{};
     return *p;
 }
 
@@ -60,6 +72,21 @@ std::unordered_map<std::string, std::shared_ptr<const TphdPack>>& g_packCache() 
 
 aurora::texture::ReplacementGroup& g_textureReplacementGroup() {
     static auto* p = new aurora::texture::ReplacementGroup{};
+    return *p;
+}
+
+struct RegisteredTexture {
+    std::list<std::vector<u8>>::iterator buffer;
+    aurora::texture::ReplacementRegistration registration;
+};
+
+std::unordered_map<const void*, RegisteredTexture>& g_registeredTextures() {
+    static auto* p = new std::unordered_map<const void*, RegisteredTexture>{};
+    return *p;
+}
+
+std::unordered_map<std::string, const void*>& g_logicalTexturePointers() {
+    static auto* p = new std::unordered_map<std::string, const void*>{};
     return *p;
 }
 
@@ -97,10 +124,38 @@ void clear_hd_texture_registrations_locked() {
     aurora::texture::unregister_replacements(g_textureReplacementGroup());
     g_textureReplacementGroup().registrations.clear();
     g_textureBuffers().clear();
+    g_registeredTextures().clear();
+    g_logicalTexturePointers().clear();
+}
+
+void unregister_registered_texture_locked(const void* pixelPtr) {
+    const auto existing = g_registeredTextures().find(pixelPtr);
+    if (existing == g_registeredTextures().end()) return;
+    aurora::texture::unregister_replacement(existing->second.registration);
+    auto& registrations = g_textureReplacementGroup().registrations;
+    registrations.erase(std::remove_if(registrations.begin(), registrations.end(),
+        [&](const aurora::texture::ReplacementRegistration& registration) {
+            return registration.id == existing->second.registration.id;
+        }), registrations.end());
+    g_textureBuffers().erase(existing->second.buffer);
+    g_registeredTextures().erase(existing);
+    auto& logicalPointers = g_logicalTexturePointers();
+    for (auto it = logicalPointers.begin(); it != logicalPointers.end();) {
+        if (it->second == pixelPtr) {
+            it = logicalPointers.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void register_hd_arc_range_locked(const void* begin, size_t size, std::string_view label) {
     if (begin == nullptr || size == 0) return;
+    const auto existing = std::find_if(g_arcRanges().begin(), g_arcRanges().end(),
+        [&](const HdArcRange& range) {
+            return range.begin == begin && range.size == size;
+        });
+    if (existing != g_arcRanges().end()) return;
     g_arcRanges().push_back({
         .begin = begin,
         .size = size,
@@ -140,10 +195,11 @@ std::optional<size_t> get_file_size(const std::filesystem::path& path) {
     }
 
     const Sint64 size = SDL_GetIOSize(stream.get());
-    if (size < 0) {
+    if (size < 0 || static_cast<uint64_t>(size) > kMaxHdArchiveBytes ||
+        static_cast<uint64_t>(size) > std::numeric_limits<size_t>::max()) {
         return std::nullopt;
     }
-    return size;
+    return static_cast<size_t>(size);
 }
 
 // On-disk Yaz0 file header.
@@ -154,7 +210,13 @@ struct Yaz0Header {
 };
 static_assert(sizeof(Yaz0Header) == 0x10);
 
-// If `bytes` is a Yaz0 stream, return the inflated payload; otherwise nullopt.
+bool isYaz0(std::span<const u8> bytes) {
+    return bytes.size() >= sizeof(Yaz0Header) &&
+           std::memcmp(bytes.data(), "Yaz0", 4) == 0;
+}
+
+// Bounded Yaz0 decoder.  JKRDecomp::decodeSZS only receives an output length,
+// so calling it on a truncated file lets it read beyond the input buffer.
 std::optional<std::vector<u8>> tryDecodeYaz0(std::span<const u8> bytes) {
     if (bytes.size() < sizeof(Yaz0Header) ||
         std::memcmp(bytes.data(), "Yaz0", 4) != 0) {
@@ -163,22 +225,73 @@ std::optional<std::vector<u8>> tryDecodeYaz0(std::span<const u8> bytes) {
     ZoneScoped;
     const auto* hdr = reinterpret_cast<const Yaz0Header*>(bytes.data());
     const u32 expandedSize = hdr->decompressedSize;
-    std::vector<u8> decoded(expandedSize);
-    JKRDecomp::decodeSZS(const_cast<u8*>(bytes.data()), decoded.data(),
-                         expandedSize, 0);
+    if (expandedSize == 0 || expandedSize > kMaxHdArchiveBytes) {
+        return std::nullopt;
+    }
+
+    std::vector<u8> decoded;
+    try {
+        decoded.resize(expandedSize);
+    } catch (const std::bad_alloc&) {
+        return std::nullopt;
+    } catch (const std::length_error&) {
+        return std::nullopt;
+    }
+
+    size_t srcPos = sizeof(Yaz0Header);
+    size_t dstPos = 0;
+    while (dstPos < decoded.size()) {
+        if (srcPos >= bytes.size()) return std::nullopt;
+        const u8 code = bytes[srcPos++];
+        for (u8 bit = 0x80; bit != 0 && dstPos < decoded.size(); bit >>= 1) {
+            if (code & bit) {
+                if (srcPos >= bytes.size()) return std::nullopt;
+                decoded[dstPos++] = bytes[srcPos++];
+                continue;
+            }
+
+            if (bytes.size() - srcPos < 2) return std::nullopt;
+            const u8 first = bytes[srcPos++];
+            const u8 second = bytes[srcPos++];
+            const size_t distance = (static_cast<size_t>(first & 0x0F) << 8) | second;
+            if (distance >= dstPos) return std::nullopt;
+
+            size_t count = first >> 4;
+            if (count == 0) {
+                if (srcPos >= bytes.size()) return std::nullopt;
+                count = static_cast<size_t>(bytes[srcPos++]) + 0x12;
+            } else {
+                count += 2;
+            }
+            if (count > decoded.size() - dstPos) return std::nullopt;
+
+            size_t copyPos = dstPos - distance - 1;
+            for (size_t i = 0; i < count; ++i) {
+                decoded[dstPos++] = decoded[copyPos++];
+            }
+        }
+    }
     return decoded;
 }
 
-std::optional<std::vector<u8>> read_file(const std::filesystem::path& path) {
+std::optional<std::vector<u8>> read_file(const std::filesystem::path& path,
+                                         size_t maxSize = kMaxHdArchiveBytes) {
     auto stream = open_stream(path);
     if (stream == nullptr) {
         return std::nullopt;
     }
     const Sint64 len = SDL_GetIOSize(stream.get());
-    if (len < 0) {
+    if (len < 0 || static_cast<uint64_t>(len) > maxSize) {
         return std::nullopt;
     }
-    std::vector<u8> buf(len);
+    std::vector<u8> buf;
+    try {
+        buf.resize(static_cast<size_t>(len));
+    } catch (const std::bad_alloc&) {
+        return std::nullopt;
+    } catch (const std::length_error&) {
+        return std::nullopt;
+    }
     size_t total = 0;
     while (total < buf.size()) {
         const size_t got = SDL_ReadIO(stream.get(), buf.data() + total, buf.size() - total);
@@ -434,36 +547,49 @@ struct DeswizzleResult {
 
 DeswizzleResult deswizzleAllMips(const Gx2FormatMapping& m, const GtxSurface& s) {
     ZoneScoped;
-    DeswizzleResult out{};
-    const u32 maxLevels = std::min(s.mipCount, 13u);
-    for (u32 level = 0; level < maxLevels; ++level) {
-        const std::span<const u8> slice = mipLevelData(s, level);
-        if (slice.empty()) break;
+    try {
+        DeswizzleResult out{};
+        const u32 maxLevels = std::min(s.mipCount, 13u);
+        for (u32 level = 0; level < maxLevels; ++level) {
+            const std::span<const u8> slice = mipLevelData(s, level);
+            if (slice.empty()) return {};
 
-        const MipLevelDesc lvl = mipLevelDesc(s, level, m.isBcn, m.bpp);
-        const addrlib::SurfaceDesc desc{
-            .width    = lvl.width,
-            .height   = lvl.height,
-            .pitch    = lvl.pitch,
-            .bpp      = m.bpp,
-            .tileMode = lvl.tileMode,
-            .swizzle  = s.swizzle,
-            .isBcn    = m.isBcn,
-            .isDepth  = false,
-        };
+            const MipLevelDesc lvl = mipLevelDesc(s, level, m.isBcn, m.bpp);
+            const addrlib::SurfaceDesc desc{
+                .width    = lvl.width,
+                .height   = lvl.height,
+                .pitch    = lvl.pitch,
+                .bpp      = m.bpp,
+                .tileMode = lvl.tileMode,
+                .swizzle  = s.swizzle,
+                .isBcn    = m.isBcn,
+                .isDepth  = false,
+            };
 
-        auto linear = applyExpansion(m.expansion,
-                                     addrlib::deswizzle(desc, slice),
-                                     lvl.width, lvl.height);
-        out.bytes.insert(out.bytes.end(), linear.begin(), linear.end());
-        out.mipCount = level + 1;
+            auto deswizzled = addrlib::deswizzle(desc, slice);
+            if (!deswizzled) return {};
+            if (m.expansion != Expansion::None &&
+                static_cast<size_t>(lvl.width) * lvl.height > kMaxDecodedTextureBytes / 4) {
+                return {};
+            }
+            auto linear = applyExpansion(m.expansion, std::move(*deswizzled),
+                                         lvl.width, lvl.height);
+            if (linear.size() > kMaxDecodedTextureBytes - out.bytes.size()) return {};
+            out.bytes.insert(out.bytes.end(), linear.begin(), linear.end());
+            out.mipCount = level + 1;
+        }
+        return out;
+    } catch (const std::bad_alloc&) {
+        return {};
+    } catch (const std::length_error&) {
+        return {};
     }
-    return out;
 }
 
 void registerHdSurface(const Gx2FormatMapping& m, const GtxSurface& s,
                        const void* pixelPtr, std::string_view gtxName,
-                       u32 surfaceIdx, bool replaceExistingPointer = false) {
+                       u32 surfaceIdx, bool replaceExistingPointer = false,
+                       std::string_view logicalKey = {}) {
     ZoneScoped;
     auto decoded = deswizzleAllMips(m, s);
 
@@ -477,8 +603,28 @@ void registerHdSurface(const Gx2FormatMapping& m, const GtxSurface& s,
     }
 
     std::lock_guard lk{g_cacheMutex};
-    g_textureBuffers().emplace_back(std::move(decoded.bytes));
-    const auto& bytes = g_textureBuffers().back();
+    if (!logicalKey.empty()) {
+        const auto logical = g_logicalTexturePointers().find(logicalKey);
+        if (logical != g_logicalTexturePointers().end() && logical->second != pixelPtr) {
+            unregister_registered_texture_locked(logical->second);
+        }
+    }
+    if (g_registeredTextures().contains(pixelPtr)) {
+        if (!replaceExistingPointer && logicalKey.empty()) {
+            return;
+        }
+        unregister_registered_texture_locked(pixelPtr);
+    }
+
+    try {
+        g_textureBuffers().emplace_back(std::move(decoded.bytes));
+    } catch (const std::bad_alloc&) {
+        return;
+    } catch (const std::length_error&) {
+        return;
+    }
+    auto bytesIt = std::prev(g_textureBuffers().end());
+    const auto& bytes = *bytesIt;
     const aurora::texture::RawTextureReplacement replacement{
         .bytes = {bytes.data(), bytes.size()},
         .width = s.width,
@@ -496,13 +642,43 @@ void registerHdSurface(const Gx2FormatMapping& m, const GtxSurface& s,
     }
     auto registration = aurora::texture::register_replacement(std::move(replacementKey), replacement);
     if (registration.id != 0) {
-        g_textureReplacementGroup().registrations.push_back(std::move(registration));
+        try {
+            g_textureReplacementGroup().registrations.push_back(registration);
+            g_registeredTextures().emplace(pixelPtr, RegisteredTexture{
+                .buffer = bytesIt,
+                .registration = registration,
+            });
+            if (!logicalKey.empty()) {
+                g_logicalTexturePointers()[std::string(logicalKey)] = pixelPtr;
+            }
+        } catch (const std::bad_alloc&) {
+            aurora::texture::unregister_replacement(registration);
+            auto& registrations = g_textureReplacementGroup().registrations;
+            registrations.erase(std::remove_if(registrations.begin(), registrations.end(),
+                [&](const aurora::texture::ReplacementRegistration& item) {
+                    return item.id == registration.id;
+                }), registrations.end());
+            g_registeredTextures().erase(pixelPtr);
+            g_textureBuffers().erase(bytesIt);
+        } catch (const std::length_error&) {
+            aurora::texture::unregister_replacement(registration);
+            auto& registrations = g_textureReplacementGroup().registrations;
+            registrations.erase(std::remove_if(registrations.begin(), registrations.end(),
+                [&](const aurora::texture::ReplacementRegistration& item) {
+                    return item.id == registration.id;
+                }), registrations.end());
+            g_registeredTextures().erase(pixelPtr);
+            g_textureBuffers().erase(bytesIt);
+        }
+    } else {
+        g_textureBuffers().erase(bytesIt);
     }
 }
 
 bool register_hd_bti_replacement_for_buffer(const TphdPack& pack, std::string_view resourceName,
-    void* buffer, size_t resourceSize, bool replaceExistingPointer) {
-    if (buffer == nullptr || resourceSize < 0x20 || !endsWithSuffixCI(resourceName, ".bti")) {
+    void* buffer, size_t resourceSize, bool replaceExistingPointer,
+    std::string_view logicalKey = {}) {
+    if (buffer == nullptr || resourceSize <= 0x20 || !endsWithSuffixCI(resourceName, ".bti")) {
         return false;
     }
 
@@ -531,7 +707,8 @@ bool register_hd_bti_replacement_for_buffer(const TphdPack& pack, std::string_vi
     const u8 hdMips = static_cast<u8>(std::clamp<u32>(s.mipCount, 1u, 11u));
     timg->mipmapCount = hdMips;
     timg->maxLOD = static_cast<s8>((hdMips - 1) * 8);
-    registerHdSurface(*m, s, static_cast<u8*>(buffer) + 0x20, gtx->name, 0, replaceExistingPointer);
+    registerHdSurface(*m, s, static_cast<u8*>(buffer) + 0x20, gtx->name, 0,
+                      replaceExistingPointer, logicalKey);
     return true;
 }
 
@@ -547,25 +724,32 @@ u32 bmdSlotBtiOffset(std::span<const u8> bmd, u32 slotIdx) {
     const u32 numSections = fileData->mBlockNum;
     size_t pos = kBlocksOffset;
 
-    for (u32 i = 0; i < numSections && pos + sizeof(J3DModelBlock) <= bmd.size(); ++i) {
+    for (u32 i = 0; i < numSections &&
+         sizeof(J3DModelBlock) <= bmd.size() - pos; ++i) {
         const auto* blk = reinterpret_cast<const J3DModelBlock*>(bmd.data() + pos);
         const u32 blockSize = blk->mBlockSize;
+        if (blockSize < sizeof(J3DModelBlock) || blockSize > bmd.size() - pos) return 0;
         if (blk->mBlockType == 'TEX1') {
+            if (blockSize < sizeof(J3DTextureBlock)) return 0;
             const auto* tex1 = reinterpret_cast<const J3DTextureBlock*>(bmd.data() + pos);
             const u16 numTex = tex1->mTextureNum;
             if (slotIdx >= numTex) return 0;
-            const size_t btiAbs = pos + static_cast<u32>(tex1->mpTextureRes) + slotIdx * 0x20;
-            if (btiAbs + 0x20 > bmd.size()) return 0;
+            const size_t textureOffset = tex1->mpTextureRes;
+            const size_t slotOffset = static_cast<size_t>(slotIdx) * 0x20;
+            if (textureOffset > bmd.size() - pos ||
+                slotOffset > bmd.size() - pos - textureOffset) return 0;
+            const size_t btiAbs = pos + textureOffset + slotOffset;
+            if (0x20 > bmd.size() - btiAbs) return 0;
             return static_cast<u32>(btiAbs);
         }
-        if (blockSize == 0) break;
         pos += blockSize;
     }
     return 0;
 }
 
 size_t register_hd_bmd_textures_for_buffer(const TphdPack& pack, std::string_view resourceName,
-    void* buffer, size_t resourceSize, bool replaceExistingPointer) {
+    void* buffer, size_t resourceSize, bool replaceExistingPointer,
+    std::string_view logicalKey = {}) {
     if (buffer == nullptr || resourceSize < 0x20) return 0;
     if (!endsWithSuffixCI(resourceName, ".bmd") &&
         !endsWithSuffixCI(resourceName, ".bdl")) return 0;
@@ -595,14 +779,17 @@ size_t register_hd_bmd_textures_for_buffer(const TphdPack& pack, std::string_vie
             continue;
         }
 
-        const u32 newImgOff = 0x20 + i * 0x20;
+        const size_t newImgOff = 0x20 + static_cast<size_t>(i) * 0x20;
+        if (newImgOff >= resourceSize - btiAbs) continue;
         timg->imageOffset = static_cast<s32>(newImgOff);
         const u8 hdMips = static_cast<u8>(std::clamp<u32>(s.mipCount, 1u, 11u));
         timg->mipmapCount = hdMips;
         timg->maxLOD = static_cast<s8>((hdMips - 1) * 8);
         timg->maxAnisotropy = GX_ANISO_4;
+        std::string slotKey;
+        if (!logicalKey.empty()) slotKey = std::string(logicalKey) + "/" + std::to_string(i);
         registerHdSurface(*m, s, bmdBytes.data() + btiAbs + newImgOff, gtx->name, i,
-                          replaceExistingPointer);
+                          replaceExistingPointer, slotKey);
         ++reg;
     }
     return reg;
@@ -617,12 +804,92 @@ struct ArcFileInfo {
     u32 dataSize;
 };
 
-std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
+bool has_nul_terminated_string(std::span<const u8> table, u32 offset) {
+    if (offset >= table.size()) return false;
+    return std::memchr(table.data() + offset, 0, table.size() - offset) != nullptr;
+}
+
+// JKRMemArchive trusts all of these fields after only checking the RARC
+// signature.  Validate the entire table layout before an HD file can replace
+// a vanilla archive.
+bool is_valid_rarc_bytes(std::span<const u8> arc) {
+    constexpr size_t kMetaBase = sizeof(SArcHeader);
+    constexpr u32 kMaxRarcNodes = 16384;
+    constexpr u32 kMaxRarcFiles = 65536;
+    if (arc.size() < kMetaBase + sizeof(SArcDataInfo) ||
+        std::memcmp(arc.data(), "RARC", 4) != 0 ||
+        reinterpret_cast<uintptr_t>(arc.data()) % alignof(SArcHeader) != 0) {
+        return false;
+    }
+
+    const auto* hdr = reinterpret_cast<const SArcHeader*>(arc.data());
+    const size_t headerLength = hdr->header_length;
+    const size_t fileLength = hdr->file_length;
+    if (headerLength != kMetaBase || fileLength < headerLength + sizeof(SArcDataInfo) ||
+        fileLength > arc.size()) {
+        return false;
+    }
+
+    const auto* dataInfo = reinterpret_cast<const SArcDataInfo*>(arc.data() + headerLength);
+    if (reinterpret_cast<uintptr_t>(dataInfo) % alignof(SArcDataInfo) != 0) return false;
+    const u32 nodeCount = dataInfo->num_nodes;
+    const u32 fileCount = dataInfo->num_file_entries;
+    const u32 stringSize = dataInfo->string_table_length;
+    if (nodeCount == 0 || nodeCount > kMaxRarcNodes ||
+        fileCount > kMaxRarcFiles || stringSize == 0) {
+        return false;
+    }
+
+    const size_t nodeTbl = headerLength + static_cast<size_t>(dataInfo->node_offset);
+    const size_t fileTbl = headerLength + static_cast<size_t>(dataInfo->file_entry_offset);
+    const size_t strTbl = headerLength + static_cast<size_t>(dataInfo->string_table_offset);
+    const size_t dataBase = headerLength + static_cast<size_t>(hdr->file_data_offset);
+    const size_t dataLength = hdr->file_data_length;
+    auto table_fits = [&](size_t offset, size_t count, size_t elementSize) {
+        return offset <= fileLength && count <= (fileLength - offset) / elementSize;
+    };
+    if (!table_fits(nodeTbl, nodeCount, sizeof(JKRArchive::SDIDirEntry)) ||
+        !table_fits(fileTbl, fileCount, sizeof(JKRArchive::SDIFileEntry)) ||
+        !table_fits(strTbl, stringSize, 1) || dataBase > fileLength ||
+        dataLength > fileLength - dataBase ||
+        reinterpret_cast<uintptr_t>(arc.data() + nodeTbl) % alignof(JKRArchive::SDIDirEntry) != 0 ||
+        reinterpret_cast<uintptr_t>(arc.data() + fileTbl) % alignof(JKRArchive::SDIFileEntry) != 0) {
+        return false;
+    }
+
+    const auto stringTable = arc.subspan(strTbl, stringSize);
+    const auto* nodes = reinterpret_cast<const JKRArchive::SDIDirEntry*>(arc.data() + nodeTbl);
+    const auto* files = reinterpret_cast<const JKRArchive::SDIFileEntry*>(arc.data() + fileTbl);
+    for (u32 i = 0; i < nodeCount; ++i) {
+        const auto& node = nodes[i];
+        if (!has_nul_terminated_string(stringTable, node.name_offset) ||
+            node.first_file_index > fileCount ||
+            node.num_entries > fileCount - node.first_file_index) {
+            return false;
+        }
+    }
+    for (u32 i = 0; i < fileCount; ++i) {
+        const auto& entry = files[i];
+        const u32 typeFlagsAndName = entry.type_flags_and_name_offset;
+        if (!has_nul_terminated_string(stringTable, typeFlagsAndName & 0xFFFFFF)) {
+            return false;
+        }
+        // Directory entries use their data fields for directory metadata.  A
+        // normal file, however, is later addressed directly by JKRArchive.
+        if ((typeFlagsAndName >> 24 & 0x03) == 0x01 &&
+            (entry.data_offset > dataLength || entry.data_size > dataLength - entry.data_offset)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::optional<std::vector<ArcFileInfo>> parseRarcFiles(std::span<const u8> arc) {
+    if (!is_valid_rarc_bytes(arc)) return std::nullopt;
+    try {
     std::vector<ArcFileInfo> out;
-    if (arc.size() < 0x40 || std::memcmp(arc.data(), "RARC", 4) != 0) return out;
 
     constexpr size_t kMetaBase = sizeof(SArcHeader);  // = 0x20
-    if (arc.size() < kMetaBase + sizeof(SArcDataInfo)) return out;
 
     const auto* hdr = reinterpret_cast<const SArcHeader*>(arc.data());
     const auto* dataInfo = reinterpret_cast<const SArcDataInfo*>(arc.data() + kMetaBase);
@@ -630,10 +897,10 @@ std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
     const u32 nodeCount   = dataInfo->num_nodes;
     const u32 fileCount   = dataInfo->num_file_entries;
     const u32 stringSize  = dataInfo->string_table_length;
-    const size_t nodeTbl  = dataInfo->node_offset + kMetaBase;
-    const size_t fileTbl  = dataInfo->file_entry_offset + kMetaBase;
-    const size_t strTbl   = dataInfo->string_table_offset + kMetaBase;
-    const size_t dataBase = kMetaBase + hdr->file_data_offset;
+    const size_t nodeTbl  = static_cast<size_t>(dataInfo->node_offset) + kMetaBase;
+    const size_t fileTbl  = static_cast<size_t>(dataInfo->file_entry_offset) + kMetaBase;
+    const size_t strTbl   = static_cast<size_t>(dataInfo->string_table_offset) + kMetaBase;
+    const size_t dataBase = kMetaBase + static_cast<size_t>(hdr->file_data_offset);
 
     auto tableFits = [&](size_t offset, size_t count, size_t elementSize) {
         return offset <= arc.size() && count <= (arc.size() - offset) / elementSize;
@@ -641,7 +908,7 @@ std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
     if (!tableFits(nodeTbl, nodeCount, sizeof(JKRArchive::SDIDirEntry)) ||
         !tableFits(fileTbl, fileCount, sizeof(JKRArchive::SDIFileEntry)) ||
         !tableFits(strTbl, stringSize, 1) || dataBase > arc.size()) {
-        return out;
+        return std::nullopt;
     }
 
     auto readStringAt = [&](u32 offset) -> std::string {
@@ -661,9 +928,14 @@ std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
     const auto* files = reinterpret_cast<const JKRArchive::SDIFileEntry*>(
         arc.data() + fileTbl);
 
+    constexpr size_t kMaxRarcPathLength = 1024;
+    constexpr size_t kMaxRarcPathBytes = 8u * 1024u * 1024u;
+    size_t pathBytes = 0;
+    out.reserve(std::min<size_t>(fileCount, 4096));
     for (u32 ni = 0; ni < nodeCount; ++ni) {
         const auto& node = nodes[ni];
         const std::string dirName = readStringAt(node.name_offset);
+        if (dirName.size() > kMaxRarcPathLength) return std::nullopt;
         const u16 fc       = node.num_entries;
         const u32 firstIdx = node.first_file_index;
         const bool isRoot = (ni == 0);
@@ -678,6 +950,7 @@ std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
 
             std::string fname = readStringAt(typeFlagsAndName & 0xFFFFFF);
             if (fname.empty() || fname == "." || fname == "..") continue;
+            if (fname.size() > kMaxRarcPathLength) return std::nullopt;
 
             const u32 entryOffset = entry.data_offset;
             const u32 entrySize = entry.data_size;
@@ -686,16 +959,274 @@ std::vector<ArcFileInfo> parseRarcFiles(std::span<const u8> arc) {
                 continue;
             }
 
+            std::string path = (!isRoot && !dirName.empty())
+                ? dirName + "/" + fname
+                : std::move(fname);
+            if (path.size() > kMaxRarcPathLength || out.size() >= kMaxRarcFiles ||
+                path.size() > kMaxRarcPathBytes - pathBytes) {
+                return std::nullopt;
+            }
+            pathBytes += path.size();
             out.push_back({
-                (!isRoot && !dirName.empty())
-                    ? dirName + "/" + fname
-                    : std::move(fname),
+                std::move(path),
                 static_cast<u32>(dataBase + entryOffset),
                 entrySize,
             });
         }
     }
     return out;
+    } catch (const std::bad_alloc&) {
+        return std::nullopt;
+    } catch (const std::length_error&) {
+        return std::nullopt;
+    }
+}
+
+std::optional<std::vector<u8>> load_valid_hd_rarc(const std::filesystem::path& path) {
+    auto bytes = read_file(path);
+    if (!bytes) return std::nullopt;
+    if (isYaz0(*bytes)) {
+        bytes = tryDecodeYaz0(*bytes);
+        if (!bytes) return std::nullopt;
+    }
+    if (!is_valid_rarc_bytes(*bytes)) return std::nullopt;
+    if (!parseRarcFiles(std::span<const u8>(bytes->data(), bytes->size()))) return std::nullopt;
+    return bytes;
+}
+
+u16 read_be_u16(std::span<const u8> bytes, size_t offset) {
+    return static_cast<u16>(bytes[offset] << 8 | bytes[offset + 1]);
+}
+
+u32 read_be_u32(std::span<const u8> bytes, size_t offset) {
+    return static_cast<u32>(bytes[offset]) << 24 |
+           static_cast<u32>(bytes[offset + 1]) << 16 |
+           static_cast<u32>(bytes[offset + 2]) << 8 |
+           static_cast<u32>(bytes[offset + 3]);
+}
+
+bool jpc_range_fits(size_t offset, size_t count, size_t size, size_t limit) {
+    return offset <= limit && count <= (limit - offset) / size;
+}
+
+bool jpc_magic_at(std::span<const u8> bytes, size_t offset, const char (&magic)[5]) {
+    return std::memcmp(bytes.data() + offset, magic, 4) == 0;
+}
+
+bool validate_jpc_color_table(std::span<const u8> bytes, size_t blockPos, size_t blockSize,
+                              s16 tableOffset, u8 keyCount, s16 frameMax) {
+    if (tableOffset < 0x34 || keyCount == 0 || frameMax < 0 || frameMax > 4096 ||
+        !jpc_range_fits(static_cast<size_t>(tableOffset), keyCount, 6, blockSize)) {
+        return false;
+    }
+    s16 previous = -1;
+    for (u8 i = 0; i < keyCount; ++i) {
+        const s16 index = static_cast<s16>(read_be_u16(bytes, blockPos + tableOffset + i * 6));
+        if (index < 0 || index <= previous || index > frameMax || (i == 0 && index != 0)) {
+            return false;
+        }
+        previous = index;
+    }
+    // makeColorTable indexes i_data[j] once per frame, including after the
+    // last key; its final key must therefore land on the final frame.
+    return previous == frameMax;
+}
+
+std::optional<size_t> jpc_texture_data_size(u16 width, u16 height, u8 format,
+                                            bool hasMips, u8 mipLevels) {
+    if (width == 0 || height == 0 || mipLevels == 0 || mipLevels > 11) {
+        return std::nullopt;
+    }
+    u32 shiftX = 0;
+    u32 shiftY = 0;
+    switch (format) {
+    case 0x0: case 0x8: case 0xE: shiftX = 3; shiftY = 3; break;
+    case 0x1: case 0x2: case 0x9: shiftX = 3; shiftY = 2; break;
+    case 0x3: case 0x4: case 0x5: case 0x6: case 0xA: shiftX = 2; shiftY = 2; break;
+    default: return std::nullopt;
+    }
+    const size_t bytesPerTile = format == 0x6 ? 64 : 32;
+    size_t total = 0;
+    for (u8 level = 0; level < (hasMips ? mipLevels : 1); ++level) {
+        const size_t tilesX = (static_cast<size_t>(width) + (1u << shiftX) - 1) >> shiftX;
+        const size_t tilesY = (static_cast<size_t>(height) + (1u << shiftY) - 1) >> shiftY;
+        if (tilesX != 0 && tilesY > std::numeric_limits<size_t>::max() / tilesX) {
+            return std::nullopt;
+        }
+        const size_t tiles = tilesX * tilesY;
+        if (tiles > (kMaxHdArchiveBytes - total) / bytesPerTile) return std::nullopt;
+        total += tiles * bytesPerTile;
+        width = std::max<u16>(1, width / 2);
+        height = std::max<u16>(1, height / 2);
+    }
+    return total;
+}
+
+bool is_valid_jpc_bytes(std::span<const u8> bytes) {
+    // This exactly mirrors the JPAC2-10 layout consumed by JPAResourceLoader.
+    // That loader has no input length parameter, so every cursor, count and
+    // data-dependent pointer must be proven in-range before it is constructed.
+    constexpr size_t kHeaderSize = 0x10;
+    constexpr u16 kMaxResources = 8192;
+    constexpr u16 kMaxTextures = 4096;
+    constexpr u16 kMaxBlocksPerResource = 128;
+    if (bytes.size() < kHeaderSize || std::memcmp(bytes.data(), "JPAC2-10", 8) != 0) {
+        return false;
+    }
+
+    const u16 resourceCount = read_be_u16(bytes, 0x08);
+    const u16 textureCount = read_be_u16(bytes, 0x0A);
+    const size_t textureTable = read_be_u32(bytes, 0x0C);
+    if (resourceCount > kMaxResources || textureCount > kMaxTextures ||
+        textureTable < kHeaderSize || textureTable > bytes.size()) {
+        return false;
+    }
+
+    size_t offset = kHeaderSize;
+    for (u16 resource = 0; resource < resourceCount; ++resource) {
+        if (!jpc_range_fits(offset, 1, 8, textureTable)) return false;
+        const u16 blockCount = read_be_u16(bytes, offset + 2);
+        const u8 fieldCount = bytes[offset + 4];
+        const u8 keyCount = bytes[offset + 5];
+        const u8 textureIndexCount = bytes[offset + 6];
+        if (blockCount > kMaxBlocksPerResource) return false;
+        offset += 8;
+
+        u16 fields = 0, keys = 0, tdbs = 0;
+        bool hasDynamics = false, hasBaseShape = false, hasExtraShape = false;
+        bool hasChildShape = false, hasExTexShape = false;
+        for (u16 block = 0; block < blockCount; ++block) {
+            if (!jpc_range_fits(offset, 1, 8, textureTable)) return false;
+            const u32 size = read_be_u32(bytes, offset + 4);
+            if (size < 8 || size > textureTable - offset) return false;
+
+            if (jpc_magic_at(bytes, offset, "FLD1")) {
+                if (size < 0x41 || fields >= fieldCount || (read_be_u32(bytes, offset + 8) & 0xF) > 8) {
+                    return false;
+                }
+                ++fields;
+            } else if (jpc_magic_at(bytes, offset, "KFA1")) {
+                const u8 count = bytes[offset + 9];
+                if (count == 0 || keys >= keyCount || !jpc_range_fits(0x0C, count, 16, size)) {
+                    return false;
+                }
+                ++keys;
+            } else if (jpc_magic_at(bytes, offset, "BEM1")) {
+                if (hasDynamics || size < 0x79 || ((read_be_u32(bytes, offset + 8) >> 8) & 7) > 6) {
+                    return false;
+                }
+                hasDynamics = true;
+            } else if (jpc_magic_at(bytes, offset, "BSP1")) {
+                if (hasBaseShape || size < 0x34) return false;
+                const u32 flags = read_be_u32(bytes, offset + 8);
+                const u16 blend = read_be_u16(bytes, offset + 0x18);
+                const bool texCrdAnim = (flags & 0x01000000) != 0;
+                const bool texAnim = (bytes[offset + 0x1E] & 1) != 0;
+                const bool prmAnim = (bytes[offset + 0x21] & 2) != 0;
+                const bool envAnim = (bytes[offset + 0x21] & 8) != 0;
+                const u8 texAnimType = (bytes[offset + 0x1E] >> 2) & 7;
+                const u8 colorAnimType = (bytes[offset + 0x21] >> 4) & 7;
+                const u8 texKeys = bytes[offset + 0x1F];
+                const u8 prmKeys = bytes[offset + 0x22];
+                const u8 envKeys = bytes[offset + 0x23];
+                const s16 frameMax = static_cast<s16>(read_be_u16(bytes, offset + 0x24));
+                size_t variableOffset = 0x34;
+                if (texCrdAnim) variableOffset += 0x28;
+                if ((flags & 0x0F) > 10 || ((flags >> 4) & 7) > 4 ||
+                    ((flags >> 7) & 7) > 4 || ((flags >> 15) & 7) > 5 ||
+                    (blend & 3) > 2 || ((blend >> 2) & 0x0F) > 9 ||
+                    ((blend >> 6) & 0x0F) > 9 ||
+                    bytes[offset + 0x20] >= textureIndexCount ||
+                    variableOffset > size ||
+                    (texAnim && texAnimType > 4) ||
+                    ((prmAnim || envAnim) && colorAnimType > 4) ||
+                    (texAnim && (texKeys == 0 || !jpc_range_fits(variableOffset, texKeys, 1, size))) ||
+                    (prmAnim && !validate_jpc_color_table(bytes, offset, size,
+                        static_cast<s16>(read_be_u16(bytes, offset + 0x0C)), prmKeys, frameMax)) ||
+                    (envAnim && !validate_jpc_color_table(bytes, offset, size,
+                        static_cast<s16>(read_be_u16(bytes, offset + 0x0E)), envKeys, frameMax))) {
+                    return false;
+                }
+                if (texAnim) {
+                    for (u8 i = 0; i < texKeys; ++i) {
+                        if (bytes[offset + variableOffset + i] >= textureIndexCount) return false;
+                    }
+                }
+                hasBaseShape = true;
+            } else if (jpc_magic_at(bytes, offset, "ESP1")) {
+                const u32 flags = size >= 0x60 ? read_be_u32(bytes, offset + 8) : 0;
+                if (hasExtraShape || size < 0x60 ||
+                    ((flags & 1) && (((flags >> 8) & 3) > 2 ||
+                                     ((flags >> 10) & 3) > 2))) return false;
+                hasExtraShape = true;
+            } else if (jpc_magic_at(bytes, offset, "SSP1")) {
+                const u32 flags = size >= 0x48 ? read_be_u32(bytes, offset + 8) : 0;
+                if (hasChildShape || size < 0x48 || (flags & 0x0F) > 10 ||
+                    ((flags >> 4) & 7) > 4 || ((flags >> 7) & 7) > 4 ||
+                    bytes[offset + 0x45] >= textureIndexCount) return false;
+                hasChildShape = true;
+            } else if (jpc_magic_at(bytes, offset, "ETX1")) {
+                const u32 flags = size >= 0x27 ? read_be_u32(bytes, offset + 8) : 0;
+                if (hasExTexShape || size < 0x27 ||
+                    ((flags & 1) && bytes[offset + 0x25] >= textureIndexCount) ||
+                    ((flags & 0x100) && bytes[offset + 0x26] >= textureIndexCount)) return false;
+                hasExTexShape = true;
+            } else if (jpc_magic_at(bytes, offset, "TDB1")) {
+                if (tdbs != 0 || !jpc_range_fits(8, textureIndexCount, 2, size)) return false;
+                for (u8 i = 0; i < textureIndexCount; ++i) {
+                    if (read_be_u16(bytes, offset + 8 + i * 2) >= textureCount) return false;
+                }
+                ++tdbs;
+            } else {
+                return false;
+            }
+            offset += size;
+        }
+        if (fields != fieldCount || keys != keyCount || !hasDynamics || !hasBaseShape ||
+            (textureIndexCount == 0 ? tdbs != 0 : tdbs != 1)) {
+            return false;
+        }
+    }
+    if (offset > textureTable) return false;
+
+    offset = textureTable;
+    for (u16 texture = 0; texture < textureCount; ++texture) {
+        if (!jpc_range_fits(offset, 1, 0x40, bytes.size()) || !jpc_magic_at(bytes, offset, "TEX1")) {
+            return false;
+        }
+        const size_t size = read_be_u32(bytes, offset + 4);
+        if (size < 0x40 || size > bytes.size() - offset ||
+            std::memchr(bytes.data() + offset + 0x0C, 0, 0x14) == nullptr) {
+            return false;
+        }
+        const size_t timg = offset + 0x20;
+        const u16 width = read_be_u16(bytes, timg + 2);
+        const u16 height = read_be_u16(bytes, timg + 4);
+        const u8 format = bytes[timg];
+        const bool hasMips = bytes[timg + 0x10] != 0;
+        const u8 mipCount = bytes[timg + 0x18];
+        const s8 maxLod = static_cast<s8>(bytes[timg + 0x17]);
+        if (maxLod < 0 || (!hasMips && (mipCount > 1 || maxLod > 0)) ||
+            (hasMips && (mipCount == 0 || maxLod > 80))) {
+            return false;
+        }
+        const u8 levels = hasMips ? std::max<u8>(mipCount, static_cast<u8>(maxLod / 8 + 1)) : 1;
+        const auto imageSize = jpc_texture_data_size(width, height, format, hasMips, levels);
+        const s32 imageOffset = static_cast<s32>(read_be_u32(bytes, timg + 0x1C));
+        if (imageOffset < 0) return false;
+        const size_t imageRelative = 0x20 + static_cast<size_t>(imageOffset == 0 ? 0x20 : imageOffset);
+        if (!imageSize || imageRelative > size || *imageSize > size - imageRelative) {
+            return false;
+        }
+        const u16 paletteEntries = read_be_u16(bytes, timg + 0x0A);
+        const s32 paletteOffset = static_cast<s32>(read_be_u32(bytes, timg + 0x0C));
+        if (paletteEntries != 0 && (paletteOffset < 0 ||
+            !jpc_range_fits(0x20 + static_cast<size_t>(paletteOffset), paletteEntries, 2, size))) {
+            return false;
+        }
+        offset += size;
+    }
+    return true;
 }
 
 // Walk the HD arc, pair BMDs with their pack.gz GTX entries, deswizzle each
@@ -747,8 +1278,9 @@ bool is_field_map_arc_path(std::string_view resPath) {
            endsWithSuffixCI(resPath, ".arc");
 }
 
-std::filesystem::path hd_pack_path_for_arc(std::string_view resPath) {
-    std::filesystem::path packPath = g_contentPath / std::string(resPath);
+std::filesystem::path hd_pack_path_for_arc(const std::filesystem::path& contentPath,
+                                            std::string_view resPath) {
+    std::filesystem::path packPath = contentPath / std::string(resPath);
     packPath.replace_extension(".pack.gz");
 
     if (!resPath.starts_with("res/Layout/")) {
@@ -761,7 +1293,7 @@ std::filesystem::path hd_pack_path_for_arc(std::string_view resPath) {
         revoStem += 'R';
     }
 
-    const auto revoPackPath = g_contentPath / "res" / "LayoutRevo" /
+    const auto revoPackPath = contentPath / "res" / "LayoutRevo" /
                               (revoStem + ".pack.gz");
     if (path_exists(revoPackPath)) {
         return revoPackPath;
@@ -894,7 +1426,7 @@ void rebuild_hd_overlay_locked() {
         if (resPath.empty()) continue;
 
         if (should_register_hd_pack_for_vanilla_arc(resPath)) {
-            auto packPath = hd_pack_path_for_arc(resPath);
+            auto packPath = hd_pack_path_for_arc(g_contentPath, resPath);
             if (path_exists(packPath)) {
                 auto& entry = g_overlayEntries().emplace_back();
                 entry.dvdPath = "/" + resPath;
@@ -915,6 +1447,15 @@ void rebuild_hd_overlay_locked() {
 
         if (should_skip_hd_arc_mount(resPath)) continue;
 
+        if (endsWithSuffixCI(resPath, ".arc") && !load_valid_hd_rarc(arcPath)) {
+            HdLog.warn("HD overlay arc rejected; keeping original resource: {}", arcPath.string());
+            continue;
+        }
+        if (endsWithSuffixCI(resPath, ".jpc") && !is_valid_hd_jpc_file(arcPath)) {
+            HdLog.warn("HD overlay JPC rejected; keeping original resource: {}", arcPath.string());
+            continue;
+        }
+
         const auto fileSize = get_file_size(arcPath);
         if (!fileSize.has_value()) {
             HdLog.warn("HD overlay file size failed: {} ({})",
@@ -925,7 +1466,7 @@ void rebuild_hd_overlay_locked() {
         auto& entry = g_overlayEntries().emplace_back();
         entry.dvdPath = "/" + resPath;
         entry.arcPath = arcPath;
-        entry.packPath = hd_pack_path_for_arc(resPath);
+        entry.packPath = hd_pack_path_for_arc(g_contentPath, resPath);
         entry.size = *fileSize;
 
         overlayFiles.push_back({
@@ -954,11 +1495,29 @@ void rebuild_hd_overlay_locked() {
 
 }
 
+bool is_valid_hd_rarc_file(const std::filesystem::path& path) {
+    return load_valid_hd_rarc(path).has_value();
+}
+
+bool is_valid_hd_jpc_file(const std::filesystem::path& path) {
+    const auto bytes = read_file(path);
+    return bytes.has_value() && is_valid_jpc_bytes(*bytes);
+}
+
 void set_hd_content_path(std::filesystem::path contentPath) {
-    g_contentPath = std::move(contentPath);
     std::lock_guard lk{g_cacheMutex};
+    // Aurora's FST stores HdOverlayEntry::userData.  Detach it before the
+    // backing list is cleared so overlay_open can never receive stale data.
+    if (g_overlayCallbacksRegistered) {
+        aurora_dvd_overlay_files(nullptr, 0, nullptr);
+    }
+    g_contentPath = std::move(contentPath);
+    ++g_contentGeneration;
     clear_hd_texture_registrations_locked();
-    g_mountBuffers().clear();
+    // Callers may still be mounting a previously returned buffer.  Keep the
+    // stable list storage alive; the path map is cleared below so old content
+    // cannot be selected for future requests.
+    g_mountBuffersByPath().clear();
     g_packCache().clear();
     g_overlayEntries().clear();
     g_entryNumToOverlay().clear();
@@ -970,14 +1529,25 @@ void set_hd_content_path(std::filesystem::path contentPath) {
 }
 
 std::optional<std::vector<u8>*> try_load_hd_archive(std::string_view gcPath) {
-    if (g_contentPath.empty()) return std::nullopt;
-
     std::string_view resPath = extractResPath(gcPath);
     if (resPath.empty()) return std::nullopt;
 
     if (should_skip_hd_arc_mount(resPath)) return std::nullopt;
 
-    std::filesystem::path hdArcPath = g_contentPath / std::string(resPath);
+    std::filesystem::path contentPath;
+    uint64_t contentGeneration = 0;
+    const std::string cacheKey(resPath);
+    {
+        std::lock_guard lk{g_cacheMutex};
+        if (g_contentPath.empty()) return std::nullopt;
+        contentPath = g_contentPath;
+        contentGeneration = g_contentGeneration;
+        const auto it = g_mountBuffersByPath().find(cacheKey);
+        if (it != g_mountBuffersByPath().end()) {
+            return it->second;
+        }
+    }
+    std::filesystem::path hdArcPath = contentPath / std::string(resPath);
     ZoneScoped;
 #ifdef TRACY_ENABLE
     {
@@ -986,22 +1556,21 @@ std::optional<std::vector<u8>*> try_load_hd_archive(std::string_view gcPath) {
     }
 #endif
 
-    auto hdBytesOpt = read_file(hdArcPath);
+    auto hdBytesOpt = load_valid_hd_rarc(hdArcPath);
     if (!hdBytesOpt) {
+        HdLog.warn("HD arc rejected; keeping original resource: {}", hdArcPath.string());
         return std::nullopt;
-    }
-
-    if (auto inflated = tryDecodeYaz0(*hdBytesOpt)) {
-        HdLog.info("HD arc Yaz0-decompressed: {} -> {} bytes",
-                   hdArcPath.filename().string(), inflated->size());
-        hdBytesOpt = std::move(inflated);
     }
 
     auto hdFiles = parseRarcFiles(std::span<const u8>(
         hdBytesOpt->data(), hdBytesOpt->size()));
+    if (!hdFiles) {
+        HdLog.warn("HD arc file table rejected; keeping original resource: {}", hdArcPath.string());
+        return std::nullopt;
+    }
 
     // Sidecar pack.gz holds the HD textures.
-    auto hdPackPath = hd_pack_path_for_arc(resPath);
+    auto hdPackPath = hd_pack_path_for_arc(contentPath, resPath);
     auto hdPack = load_pack_cached(hdPackPath);
 
     // std::list keeps element addresses stable for aurora's pointer map.
@@ -1009,8 +1578,16 @@ std::optional<std::vector<u8>*> try_load_hd_archive(std::string_view gcPath) {
     std::string filename = hdArcPath.filename().string();
     {
         std::lock_guard lk{g_cacheMutex};
+        if (contentGeneration != g_contentGeneration) {
+            return std::nullopt;
+        }
+        const auto existing = g_mountBuffersByPath().find(cacheKey);
+        if (existing != g_mountBuffersByPath().end()) {
+            return existing->second;
+        }
         g_mountBuffers().emplace_back(std::move(*hdBytesOpt));
         mountBytes = &g_mountBuffers().back();
+        g_mountBuffersByPath().emplace(cacheKey, mountBytes);
         register_hd_arc_range_locked(mountBytes->data(), mountBytes->size(), filename);
     }
 
@@ -1019,7 +1596,7 @@ std::optional<std::vector<u8>*> try_load_hd_archive(std::string_view gcPath) {
                mountBytes->size(), hdPack ? "yes" : "no");
 
     if (hdPack != nullptr) {
-        register_hd_textures_for_arc(*mountBytes, hdFiles, *hdPack, filename);
+        register_hd_textures_for_arc(*mountBytes, *hdFiles, *hdPack, filename);
     }
 
     return mountBytes;
@@ -1050,7 +1627,8 @@ void register_mounted_hd_archive(s32 entryNum, void* arcBytes, size_t arcSize) {
     }
 
     auto hdFiles = parseRarcFiles(std::span<const u8>(arcSpan.data(), arcSpan.size()));
-    register_hd_textures_for_arc(arcSpan, hdFiles, *hdPack, label);
+    if (!hdFiles) return;
+    register_hd_textures_for_arc(arcSpan, *hdFiles, *hdPack, label);
 }
 
 void register_copied_hd_resource(s32 entryNum, std::string_view resourceName, void* buffer,
@@ -1077,10 +1655,26 @@ void register_copied_hd_resource(s32 entryNum, std::string_view resourceName, vo
         return;
     }
 
+    std::string logicalKey;
+    try {
+        logicalKey = std::to_string(entryNum) + ":";
+        logicalKey.reserve(logicalKey.size() + resourceName.size());
+        for (unsigned char c : resourceName) {
+            logicalKey.push_back(static_cast<char>((c >= 'A' && c <= 'Z') ?
+                c + ('a' - 'A') : c));
+        }
+    } catch (const std::bad_alloc&) {
+        return;
+    } catch (const std::length_error&) {
+        return;
+    }
+
     if (isBti) {
-        register_hd_bti_replacement_for_buffer(*hdPack, resourceName, buffer, resourceSize, true);
+        register_hd_bti_replacement_for_buffer(*hdPack, resourceName, buffer, resourceSize, true,
+                                               logicalKey);
     } else {
-        register_hd_bmd_textures_for_buffer(*hdPack, resourceName, buffer, resourceSize, true);
+        register_hd_bmd_textures_for_buffer(*hdPack, resourceName, buffer, resourceSize, true,
+                                            logicalKey);
     }
 }
 

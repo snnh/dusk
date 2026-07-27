@@ -75,6 +75,10 @@ endif ()
 set(AURORA_ENABLE_DVD ON CACHE BOOL "Enable DVD API support" FORCE)
 set(AURORA_ENABLE_CARD ON CACHE BOOL "Enable CARD API support" FORCE)
 set(AURORA_ENABLE_RMLUI ON CACHE BOOL "Enable RmlUi UI support" FORCE)
+include(cmake/ApplyAuroraPatch.cmake)
+dusk_apply_aurora_patch(
+        "${CMAKE_CURRENT_SOURCE_DIR}/extern/aurora"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ci/patches/aurora-rmlui-translate-callback.patch")
 add_subdirectory(extern/aurora EXCLUDE_FROM_ALL)
 target_compile_definitions(aurora_mtx PRIVATE MTX_USE_PS=1)
 

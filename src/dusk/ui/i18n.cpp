@@ -248,8 +248,10 @@ bool set_language(std::string_view language) noexcept {
     if (normalized.empty()) {
         normalized = "en";
     }
-    if (normalized != "en" && normalized != "zh-cn" && normalized != "zh-hans" &&
-        normalized != "fr" && normalized != "ja")
+    if (normalized == "zh-hans") {
+        normalized = "zh-cn";
+    }
+    if (normalized != "en" && normalized != "zh-cn" && normalized != "fr" && normalized != "ja")
     {
         normalized = "en";
     }
@@ -278,7 +280,7 @@ const std::string& language() noexcept {
 }
 
 bool is_simplified_chinese() noexcept {
-    return sLanguage == "zh-cn" || sLanguage == "zh-hans";
+    return sLanguage == "zh-cn";
 }
 
 bool use_harmonyos_font() noexcept {
