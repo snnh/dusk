@@ -107,6 +107,10 @@ function(setup_symbol_manifest target)
     add_dependencies(${target} symgen)
 
     if (WIN32)
+        # symgen consumes the linker PDB on Windows. Some Visual Studio CMake
+        # distributions do not initialize RelWithDebInfo linker flags, so
+        # request it explicitly instead of relying on an implicit /DEBUG.
+        target_link_options(${target} PRIVATE /DEBUG)
         set(_input --pdb "$<TARGET_PDB_FILE:${target}>")
     else ()
         set(_input --binary "$<TARGET_FILE:${target}>")

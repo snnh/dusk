@@ -602,9 +602,18 @@ void registerHdSurface(const Gx2FormatMapping& m, const GtxSurface& s,
         return;
     }
 
+    std::string logicalKeyStorage;
+    try {
+        logicalKeyStorage.assign(logicalKey);
+    } catch (const std::bad_alloc&) {
+        return;
+    } catch (const std::length_error&) {
+        return;
+    }
+
     std::lock_guard lk{g_cacheMutex};
-    if (!logicalKey.empty()) {
-        const auto logical = g_logicalTexturePointers().find(logicalKey);
+    if (!logicalKeyStorage.empty()) {
+        const auto logical = g_logicalTexturePointers().find(logicalKeyStorage);
         if (logical != g_logicalTexturePointers().end() && logical->second != pixelPtr) {
             unregister_registered_texture_locked(logical->second);
         }
@@ -648,8 +657,8 @@ void registerHdSurface(const Gx2FormatMapping& m, const GtxSurface& s,
                 .buffer = bytesIt,
                 .registration = registration,
             });
-            if (!logicalKey.empty()) {
-                g_logicalTexturePointers()[std::string(logicalKey)] = pixelPtr;
+            if (!logicalKeyStorage.empty()) {
+                g_logicalTexturePointers()[logicalKeyStorage] = pixelPtr;
             }
         } catch (const std::bad_alloc&) {
             aurora::texture::unregister_replacement(registration);
@@ -890,6 +899,7 @@ std::optional<std::vector<ArcFileInfo>> parseRarcFiles(std::span<const u8> arc) 
     std::vector<ArcFileInfo> out;
 
     constexpr size_t kMetaBase = sizeof(SArcHeader);  // = 0x20
+    constexpr size_t kMaxRarcFiles = 65536;
 
     const auto* hdr = reinterpret_cast<const SArcHeader*>(arc.data());
     const auto* dataInfo = reinterpret_cast<const SArcDataInfo*>(arc.data() + kMetaBase);

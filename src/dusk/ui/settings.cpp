@@ -697,7 +697,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     auto& state = prelaunch_state();
 
                     if (dusk::tphd_active()) {
-                        if (state.configuredDiscInfo.isPal) {
+                        if (state.configuredDiscInfo.region == iso::Region::Europe) {
                             languageNames = &kLanguageNamesEU;
                         } else {
                             languageNames = &kLanguageNamesUS;
