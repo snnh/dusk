@@ -509,7 +509,6 @@ int game_main(int argc, char* argv[]) {
         borealis::cli::add_standard_options(arg_options);
         arg_options.add_options()
             ("h,help", "Print usage")
-            ("console", "Show the Windows console window for logs", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
             ("portable", "Store settings, saves, logs, and cache in a data folder next to the executable", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
             ("dvd", "Path to DVD image file", cxxopts::value<std::string>())
             ("mods", "Path to mods directory", cxxopts::value<std::string>())
