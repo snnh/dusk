@@ -2,7 +2,15 @@ name: Build
 
 on:
   push:
+    paths-ignore:
+      - '*.md'
+      - '*LICENSE'
+      - 'docs/**'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - '*LICENSE'
+      - 'docs/**'
   workflow_dispatch:
     inputs:
       tag_name:
@@ -112,6 +120,10 @@ jobs:
             platform: macos
             preset: x-macos-ci-arm64
             artifact_name: macos-appleclang-arm64
+          - name: AppleClang macOS x86_64
+            platform: macos
+            preset: x-macos-ci-x86_64
+            artifact_name: macos-appleclang-x86_64
           - name: AppleClang iOS arm64
             platform: ios
             preset: x-ios-ci
@@ -141,6 +153,12 @@ jobs:
         run: |
           rustup toolchain install nightly
           rustup target add --toolchain nightly aarch64-apple-tvos
+
+      - name: Install Rust x86_64 macOS target
+        if: endsWith(matrix.preset, 'x86_64')
+        run: |
+          rustup toolchain install stable
+          rustup target add x86_64-apple-darwin
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.10
@@ -219,18 +237,13 @@ jobs:
 
       - name: Build APK
         working-directory: platforms/android
-        env:
-          DUSK_ANDROID_KEYSTORE_BASE64: ${{ secrets.DUSK_ANDROID_KEYSTORE_BASE64 }}
-          DUSK_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.DUSK_ANDROID_KEYSTORE_PASSWORD }}
-          DUSK_ANDROID_KEY_ALIAS: ${{ secrets.DUSK_ANDROID_KEY_ALIAS }}
-          DUSK_ANDROID_KEY_PASSWORD: ${{ secrets.DUSK_ANDROID_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease --rerun-tasks
 
       - name: Stage artifacts
         run: |
           mkdir -p upload/sdk
           cp build/*/stub-android-*.so upload/sdk/
-          cp platforms/android/app/build/outputs/apk/release/app-${{matrix.abi}}-release.apk upload/
+          cp platforms/android/app/build/outputs/apk/release/app-${{matrix.abi}}-release-unsigned.apk upload/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -252,6 +265,12 @@ jobs:
             msvc_arch: amd64
             vcpkg_arch: x64
             artifact_arch: x86_64
+          - name: MSVC arm64
+            runner: windows-latest
+            preset: arm64-msvc
+            msvc_arch: amd64_arm64
+            vcpkg_arch: arm64
+            artifact_arch: arm64
           # - name: Clang x86_64
           #   runner: windows-latest
           #   preset: clang
