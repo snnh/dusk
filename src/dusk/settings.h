@@ -184,6 +184,7 @@ struct UserSettings {
         ConfigVar<bool> sunsSong;
         ConfigVar<bool> autoSave;
         ConfigVar<bool> enhancedMapMenus;
+        ConfigVar<bool> aimingReticle;
 
         // Preferences
         ConfigVar<bool> enableMirrorMode;
@@ -209,6 +210,7 @@ struct UserSettings {
         ConfigVar<Resampler> resampler;
         ConfigVar<bool> enableMapBackground;
         ConfigVar<bool> disableCutscenePillarboxing;
+        ConfigVar<bool> enableHighQualityMinimapTextures;
 
         // Audio
         ConfigVar<bool> noLowHpSound;

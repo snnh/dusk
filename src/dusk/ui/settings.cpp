@@ -6,13 +6,14 @@
 #include "dusk/app_info.hpp"
 #include "dusk/audio/DuskAudioSystem.h"
 #include "dusk/audio/DuskDsp.hpp"
-#include "dusk/android_frame_rate.hpp"
 #include "dusk/config.hpp"
 #include "dusk/hotkeys.h"
 #include "dusk/data.hpp"
-#include "dusk/file_select.hpp"
 #include "dusk/imgui/ImGuiEngine.hpp"
 #include "dusk/io.hpp"
+#include "dusk/presentation.hpp"
+#include <borealis/io.hpp>
+#include <borealis/file_select.hpp>
 #include "dusk/livesplit.h"
 #include "dusk/discord_presence.hpp"
 #include "dusk/speedrun.h"
@@ -31,8 +32,8 @@
 #include <SDL3/SDL_filesystem.h>
 #include <fmt/format.h>
 
-#if DUSK_ENABLE_SENTRY_NATIVE
-#include "dusk/crash_reporting.h"
+#if BOREALIS_HAS_SENTRY
+#include <borealis/sentry.hpp>
 #endif
 
 #include <algorithm>
@@ -274,7 +275,7 @@ Rml::String configured_data_path_display_name() {
         return "(none)";
     }
 
-    auto display = display_name_for_path(path);
+    auto display = borealis::file_select::display_name(path);
     if (display.empty()) {
         return path;
     }
@@ -323,17 +324,17 @@ void show_data_folder_error_modal(std::string_view message) {
     }
 }
 
-void data_folder_dialog_callback(void*, const char* path, const char* error) {
-    if (error != nullptr) {
-        show_data_folder_error_modal(error);
+void data_folder_dialog_callback(borealis::file_select::Result result) {
+    if (result.status == borealis::file_select::Status::Canceled) {
         return;
     }
-    if (path == nullptr) {
+    if (result.status != borealis::file_select::Status::Selected || result.locations.empty()) {
+        show_data_folder_error_modal("Dusklight could not open the folder picker.");
         return;
     }
 
     std::string dataPathError;
-    if (data::set_custom_data_path(path, &dataPathError)) {
+    if (data::set_custom_data_path(result.locations.front(), &dataPathError)) {
         mDoAud_seStartMenu(kSoundItemChange);
         return;
     }
@@ -531,7 +532,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                                 if (path.empty()) {
                                     display = "(none)";
                                 } else {
-                                    display = display_name_for_path(path);
+                                    display = borealis::file_select::display_name(path);
                                     if (display.empty()) {
                                         display = path;
                                     }
@@ -549,7 +550,6 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 rightPane, [](Pane& pane) {
                     pane.add_rml("[SET_THE_DISC_IMAGE_THAT_DUSKLIGHT_USES_TO_LAUNCH_THE_GAME_CHANGES_REQUIR]");
                 });
-
             leftPane.register_control(
                 leftPane
                     .add_select_button({
@@ -611,48 +611,53 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                                   "<br/><br/>[CHANGES_REQUIRE_A_RESTART]");
                 });
 
-#if DUSK_CAN_CHANGE_DATA_FOLDER
-            leftPane.register_control(
-                leftPane.add_select_button({
-                    .key = "[DATA_FOLDER]",
-                    .getValue = [] { return configured_data_path_display_name(); },
-                    .isModified = [] { return data::is_data_path_restart_pending(); },
-                }),
-                rightPane, [](Pane& pane) {
-                    pane.add_text("[THE_DATA_FOLDER_IS_WHERE_DUSKLIGHT_STORES_SETTINGS_SAVES_LOGS_TEXTURE_RE]");
-                    pane.add_child<DataFolderPathText>();
+            if (data::manager().capabilities().canChangeLocation &&
+                borealis::file_select::capabilities().canOpenFolder)
+            {
+                leftPane.register_control(
+                    leftPane.add_select_button({
+                        .key = "[DATA_FOLDER]",
+                        .getValue = [] { return configured_data_path_display_name(); },
+                        .isModified = [] { return data::is_data_path_restart_pending(); },
+                    }),
+                    rightPane, [](Pane& pane) {
+                        pane.add_text("[THE_DATA_FOLDER_IS_WHERE_DUSKLIGHT_STORES_SETTINGS_SAVES_LOGS_TEXTURE_RE]");
+                        pane.add_child<DataFolderPathText>();
 #if DUSK_CAN_OPEN_DATA_FOLDER
-                    pane.add_button("[OPEN_DATA_FOLDER]").on_pressed([] {
-                        if (data::open_data_path()) {
-                            mDoAud_seStartMenu(kSoundClick);
-                        }
-                    });
+                        pane.add_button("[OPEN_DATA_FOLDER]").on_pressed([] {
+                            if (data::open_data_path()) {
+                                mDoAud_seStartMenu(kSoundClick);
+                            }
+                        });
 #endif
-                    pane.add_button("[CHANGE_DATA_FOLDER]").on_pressed([] {
-                        const auto defaultLocation =
-                            io::fs_path_to_string(data::configured_data_path());
-                        ShowFolderSelect(&data_folder_dialog_callback, nullptr,
-                            aurora::window::get_sdl_window(),
-                            defaultLocation.empty() ? nullptr : defaultLocation.c_str());
-                    });
+                        pane.add_button("[CHANGE_DATA_FOLDER]").on_pressed([] {
+                            const auto defaultLocation =
+                                borealis::io::fs_path_to_string(data::configured_data_path());
+                            borealis::file_select::open_folder(
+                                {
+                                    .parentWindow = aurora::window::get_sdl_window(),
+                                    .defaultLocation = defaultLocation,
+                                },
+                                &data_folder_dialog_callback);
+                        });
 #if defined(_WIN32)
-                    pane.add_button("[PORTABLE_MODE]").on_pressed([] {
-                        if (data::set_portable_data_path()) {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                        }
-                    });
+                        pane.add_button("[PORTABLE_MODE]").on_pressed([] {
+                            if (data::set_portable_data_path()) {
+                                mDoAud_seStartMenu(kSoundItemChange);
+                            }
+                        });
 #endif
-                    pane.add_button({
-                        .text = "[RESET_TO_DEFAULT]",
-                        .isDisabled = [] { return data::is_default_data_path(); },
-                    }).on_pressed([] {
-                        if (data::reset_data_path()) {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                        }
+                        pane.add_button({
+                            .text = "[RESET_TO_DEFAULT]",
+                            .isDisabled = [] { return data::is_default_data_path(); },
+                        }).on_pressed([] {
+                            if (data::reset_data_path()) {
+                                mDoAud_seStartMenu(kSoundItemChange);
+                            }
+                        });
+                        pane.add_rml("[DATA_WILL_BE_MIGRATED_AUTOMATICALLY_ON_RESTART]");
                     });
-                    pane.add_rml("[DATA_WILL_BE_MIGRATED_AUTOMATICALLY_ON_RESTART]");
-                });
-#endif
+            }
             leftPane.register_control(
                 leftPane.add_select_button({
                     .key = dusk::tphd_active() ? "[LANGUAGE_HD]" : "[LANGUAGE]",
@@ -991,7 +996,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             mDoAud_seStartMenu(kSoundItemChange);
                             getSettings().game.enableFrameInterpolation.setValue(
                                 static_cast<FrameInterpMode>(i));
-                            android::update_surface_frame_rate();
+                            presentation::update_frame_rate_preference();
                             config::save();
                         });
                 }
@@ -1003,7 +1008,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 return getSettings().game.enableFrameInterpolation.getValue() !=
                        FrameInterpMode::Capped;
             },
-            [](int) { android::update_surface_frame_rate(); });
+            [](int) { presentation::update_frame_rate_preference(); });
         config_bool_select(leftPane, rightPane, getSettings().game.enableMapBackground,
             {
                 .key = "[ENABLE_MINI_MAP_SHADOWS]",
@@ -1342,6 +1347,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "[ALLOWS_WOLF_LINK_TO_HOWL_AND_CHANGE_THE_TIME_OF_DAY]");
         addOption("[QUICK_TRANSFORM_R_Y]", getSettings().game.enableQuickTransform,
             "[TRANSFORM_INSTANTLY_BY_PRESSING_R_AND_Y_SIMULTANEOUSLY]");
+        addOption("[AIMING_RETICLE]", getSettings().game.aimingReticle,
+            "[SHOWS_THE_AIMING_RETICLE_FOR_BOW_AND_SLINGSHOT]");
 
         leftPane.add_section("[SPEEDRUNNING]");
         config_bool_select(leftPane, rightPane, getSettings().game.speedrunMode,
@@ -1579,15 +1586,16 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     });
                 pane.add_rml("[CHOOSE_WHICH_NOTIFICATIONS_CAN_BE_DISPLAYED]");
             });
-#if DUSK_ENABLE_SENTRY_NATIVE
+#if BOREALIS_HAS_SENTRY
         auto& crashReporting = leftPane.add_child<BoolButton>(BoolButton::Props{
             .key = "[CRASH_REPORTING]",
             .getValue =
-                [] { return crash_reporting::get_consent() == crash_reporting::Consent::Given; },
-            .setValue = [](bool enabled) { crash_reporting::set_consent(enabled); },
+                [] { return borealis::sentry::get_consent() == borealis::sentry::Consent::Given; },
+            .setValue = [](bool enabled) { borealis::sentry::set_consent(enabled); },
             .isDisabled =
                 [] {
-                    return crash_reporting::get_consent() == crash_reporting::Consent::Unavailable;
+                    return borealis::sentry::get_consent() ==
+                           borealis::sentry::Consent::Unavailable;
                 },
             .isModified = [] { return false; },
         });
@@ -1606,7 +1614,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 .key = "[CHECK_FOR_UPDATES]",
                 .helpText = "[CHECKS_GITHUB_RELEASES_FOR_A_NEW_DUSKLIGHT_VERSION_ON_STARTUP_NO_PERSONA]",
             });
-#ifdef DUSK_DISCORD
+#if BOREALIS_HAS_DISCORD
         config_bool_select(leftPane, rightPane, getSettings().game.enableDiscordPresence,
             {
                 .key = "[ENABLE_DISCORD_RICH_PRESENCE]",

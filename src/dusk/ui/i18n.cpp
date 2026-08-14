@@ -17,11 +17,12 @@
 #include "aurora/lib/rmlui/FileInterface_SDL.h"
 #include "dusk/io.hpp"
 #include "ui.hpp"
+#include <borealis/log.hpp>
 
 namespace dusk::ui::i18n {
 namespace {
 
-aurora::Module I18nLog{"dusk::ui::i18n"};
+borealis::Log I18nLog{"dusk::ui::i18n"};
 
 absl::flat_hash_map<Rml::String, Rml::String> sDictionary;
 std::string sLanguage = "en";

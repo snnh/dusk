@@ -11,8 +11,9 @@
 #include "helpers/endian.h"
 #include "dusk/io.hpp"
 #include "dusk/logging.h"
+#include <borealis/log.hpp>
 
-static aurora::Module TphdLog("dusk::tphd");
+static borealis::Log TphdLog("dusk::tphd");
 
 namespace dusk::tphd {
 

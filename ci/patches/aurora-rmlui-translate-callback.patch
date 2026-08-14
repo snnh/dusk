@@ -73,6 +73,7 @@ index 7d901b2..7c83792 100644
  float get_ui_scale() noexcept;
 +void set_translate_callback(
 +    std::function<int(Rml::String&, const Rml::String&)> callback) noexcept;
+ void set_glass_light_dir(float x, float y) noexcept;
  
  struct RuntimeTexture {
    uint32_t width = 0;
@@ -485,14 +486,13 @@ diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
 index 37fb564..fdae0e3 100644
 --- a/lib/webgpu/gpu.cpp
 +++ b/lib/webgpu/gpu.cpp
-@@ -65,6 +65,8 @@ bool g_bcTexturesSupported = false;
+@@ -65,5 +65,7 @@ bool g_bcTexturesSupported = false;
  bool g_astcTexturesSupported = false;
  bool g_textureComponentSwizzleSupported = false;
  static std::atomic_bool g_initialized = false;
 +static std::atomic_bool g_shuttingDown = false;
 +bool g_depthStencilSupported;
- 
- namespace {
+ static std::atomic_bool g_vsyncEnabled = true;
  
 @@ -377,6 +379,13 @@ static TextureWithSampler create_depth_texture(uint32_t width, uint32_t height)
    };

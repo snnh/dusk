@@ -34,8 +34,9 @@
 #include "LosTable.hpp"
 #include "TphdPack.hpp"
 #include "tracy/Tracy.hpp"
+#include <borealis/log.hpp>
 
-static aurora::Module HdLog("dusk::tphd::hd");
+static borealis::Log HdLog("dusk::tphd::hd");
 
 namespace dusk::tphd {
 

@@ -54,7 +54,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FetchDusklight.cmake")
 add_subdirectory("${DUSKLIGHT_DIR}/sdk" dusklight-sdk EXCLUDE_FROM_ALL)
 
 add_mod(my_mod
-        FEATURES game          # remove for service/asset-only mods; add webgpu for GfxService
+        FEATURES game fmt      # remove game for service-only mods; add webgpu for GfxService
         SOURCES src/mod.cpp
         MOD_JSON mod.json
         RES_DIR res            # mod resources, including icon.png and banner.png
@@ -64,6 +64,8 @@ add_mod(my_mod
 ```
 
 Available features:
+
+- `fmt`: Provides the header-only `{fmt}` library and the formatted logging helpers in `mods/svc/log.hpp`.
 - `game`: Allows calling into and hooking game code. Mods that **only** use services may omit it, providing a wider
   range of compatibility with Dusklight versions and a slightly faster build process.
 - `webgpu`: Allows importing the WebGPU API (`webgpu/webgpu.h`). Must be enabled when using
@@ -143,6 +145,9 @@ IMPORT_SERVICE_VERSION(LogService, svc_log, 0);   // required, minimum minor ver
 IMPORT_OPTIONAL_SERVICE(SomeService, svc_maybe);  // may be null
 ```
 
+A service must be imported in only **one** file (usually your `mod.cpp`). Other files may simply use `svc_log` or
+`mods::log::` after including the appropriate header.
+
 Each service is individually versioned, and there may be multiple major versions of a service provided at once,
 allowing backwards compatibility with older mods while still changing services fundamentally if necessary. A **major**
 bump is a breaking change, treated as a different service entirely. For **additive** changes, a service appends new
@@ -179,7 +184,15 @@ svc_log->write(mod_ctx, LOG_LEVEL_DEBUG, "verbose details");
 ```
 
 Messages appear in the console prefixed with your mod ID. Messages are plain UTF-8 strings and are copied before the
-call returns; use `snprintf` or `fmt::format` for formatting.
+call returns. C++ mods can enable `add_mod(... FEATURES fmt)` and use the formatted logging helpers in
+`mods/svc/log.hpp`:
+
+```cpp
+#include <mods/svc/log.hpp>
+
+mods::log::info("spawned actor {} at ({}, {})", actorName, x, y);
+mods::log::warn("health is down to {:.1f}%", healthPercent);
+```
 
 ### ResourceService (`mods/svc/resource.h`)
 
@@ -196,8 +209,8 @@ if (svc_resource->load(mod_ctx, "config.txt", &buf) == MOD_OK) {
 }
 ```
 
-Missing files return `MOD_UNAVAILABLE`. Always `free` what you `load`. Note that the bundle is read-only; for writable
-storage, use the directory from `svc_host->mod_dir(mod_ctx)`.
+Missing files return `MOD_UNAVAILABLE`. Always `free` what you `load`. The bundle is read-only; use
+`HostService::data_dir` for persistent storage.
 
 ### HostService (`mods/svc/host.h`)
 
@@ -206,9 +219,17 @@ Mod metadata and runtime interaction with the loader:
 ```cpp
 IMPORT_SERVICE(HostService, svc_host);
 
-const char* id  = svc_host->mod_id(mod_ctx);
-const char* dir = svc_host->mod_dir(mod_ctx);  // writable per-mod directory
-svc_host->fail(mod_ctx, MOD_ERROR, "something unrecoverable happened");  // disables the mod
+// Temporary mod data directory, wiped on startup
+const char* cacheDir = svc_host->mod_dir(mod_ctx);
+
+// Persistent mod data directory
+const char* dataDir = nullptr;
+if (svc_host->data_dir(mod_ctx, &dataDir) == MOD_OK) {
+    // ...
+}
+
+// Report an error and disable the mod
+svc_host->fail(mod_ctx, MOD_ERROR, "something unrecoverable happened");
 ```
 
 `get_service`/`publish_service` provide dynamic service lookup; see [Exporting Services](#exporting-services).
@@ -236,7 +257,7 @@ every service dropped its state. For your own mod's teardown, use `mod_shutdown`
 ### HookService (`mods/svc/hook.h`)
 
 Installs hooks on game functions and resolves symbols by name. You'll rarely call it directly; use the typed helpers in
-`mods/hook.hpp` described in [Hooking Game Functions](#hooking-game-functions).
+`mods/svc/hook.hpp` described in [Hooking Game Functions](#hooking-game-functions).
 
 ### OverlayService (`mods/svc/overlay.h`)
 
@@ -327,6 +348,88 @@ Change callbacks fire on the game thread whenever the value changes at runtime (
 Writes that store the same value are silent. Values applied from `config.json` or `--cvar` at registration do
 **not** fire callbacks; read the value after `register_var` for the starting state.
 
+### SaveService (`mods/svc/save.h`)
+
+Stores named binary blobs for each save slot. Blob names are scoped to the calling mod, and each mod may store up to
+`SAVE_BLOB_BUDGET_BYTES` per slot. The service copies data passed to `set_blob`.
+
+```cpp
+IMPORT_SERVICE(SaveService, svc_save);
+
+struct MySaveData {
+    uint32_t version;
+    uint32_t counter;
+};
+
+MySaveData state{1, 42};
+svc_save->set_blob(mod_ctx, "state", &state, sizeof(state));
+
+MySaveData loaded{};
+size_t loadedSize = sizeof(loaded);
+if (svc_save->get_blob(mod_ctx, "state", &loaded, &loadedSize) == MOD_OK &&
+    loadedSize == sizeof(loaded)) {
+    apply_state(loaded);
+}
+```
+
+`set_blob`, `get_blob`, and `delete_blob` operate on the current slot, which is available after creating or loading a
+save and unavailable at file select. Blob changes are written with the next game save. File-select copy and erase
+operations update the blob data as well. Use `peek_blob` to read the calling mod's data from any slot; it uses the same
+buffer contract as `get_blob`. Pass a `NULL` buffer to either read function to query the blob size.
+
+`observe_saves` registers callbacks for new, loaded, and written saves. New-save callbacks run after the slot's blobs
+are cleared. Observers are removed automatically when the mod is detached, so the output handle is only needed for
+manual unregistration. Save callbacks run on the game thread.
+
+### StageService (`mods/svc/stage.h`)
+
+Allows making changes to a stage's "stage info" (contents of .dzs/.dzr files).
+(Currently only supports editing actor nodes.)
+
+```cpp
+IMPORT_SERVICE(StageService, svc_stage);
+
+stage_actor_data_class record = {
+    "carry00",
+    0xFF000000,
+    cXyz(0.0f, 0.0f, 0.0f),
+    csXyz(0, 0, 0),
+    0,
+};
+
+StageActorHandle handle{};
+svc_stage->patch_actor(mod_ctx, "F_SP102", 0, -1, record_crc, &record, sizeof(record), &handle);
+```
+
+```
+StageActorHandle handle{};
+svc_stage->delete_actor(mod_ctx, "F_SP102", 0, -1, record_crc, &handle);
+```
+
+Patch or remove actors from the original actor list as the room loads.
+Given records must be of either `stage_actor_data_class` or `stage_tgsc_data_class` types.
+`record_crc` is the CRC-32 of the unmodified original record used to identify the record to replace or remove.
+
+```
+stage_actor_data_class record = {
+    "carry00",
+    0xFF000000,
+    cXyz(0.0f, 0.0f, 0.0f),
+    csXyz(0, 0, 0),
+    0,
+};
+
+StageActorHandle handle{};
+svc_stage->add_actor(mod_ctx, "F_SP102", 0, -1, &record, sizeof(record), &handle);
+```
+
+Add a new actor to the actor list as the room loads.
+Given records must be of either `stage_actor_data_class` or `stage_tgsc_data_class` types.
+
+Stage names may contain up to 8 characters. For patches and deletions, room `0xff` and layer `-1` match any room or
+layer; additions require a specific room. Edits are removed when the mod is detached. If multiple mods edit the same
+record, the later-loaded mod wins.
+
 ### UiService (`mods/svc/ui.h`)
 
 Integrate seamlessly with Dusklight's UI system: add controls and buttons to your mod's detail pane in the Mods window,
@@ -409,6 +512,22 @@ sets `keep_open`. A `keep_open` action can close it later (or immediately) with 
 `on_dismiss` if present and always closes. `dialog_set_body`, `dialog_set_icon`, and `dialog_add_action` mutate a live
 dialog.
 
+**Toasts:** `push_toast` enqueues a notification. Titles and bodies accept RML. The optional `type` is applied as an
+RCSS class; `warning` uses the built-in warning appearance, and mods can define their own types. A duration of 0 uses
+the default of 5 seconds.
+
+Toasts have a `mod-id` attribute, so `UI_SCOPE_OVERLAY` styles can use selectors such as
+`toast[mod-id="com.example.randomizer"].success`.
+
+```cpp
+UiToastDesc toast = UI_TOAST_DESC_INIT;
+toast.type = "success";
+toast.title_rml = "Randomizer";
+toast.body_rml = "<span>Seed loaded successfully.</span>";
+toast.duration_ms = 3000;
+svc_ui->push_toast(mod_ctx, &toast);
+```
+
 **Menu bar tabs:** `register_menu_tab` adds a tab to the in-game menu bar. `on_selected` fires when the user activates
 the tab: typically you'd push a window from it. The tab is removed by `unregister_menu_tab`, or automatically when the
 mod is disabled.
@@ -419,6 +538,26 @@ existing documents restyle immediately, and future ones pick it up when created.
 `UI_SCOPE_MENU_BAR`, `UI_SCOPE_OVERLAY`, `UI_SCOPE_TOUCH_CONTROLS`, and `UI_SCOPE_GRAPHICS_TUNER`. Sheets apply after
 host styles and may override them. Scope selectors tightly (use `[mod-id="..."]`!), especially for `UI_SCOPE_WINDOW`,
 unless changing host UI is intentional.
+
+### WindowService (`mods/svc/window.h`)
+
+Allows creating new windows that can be rendered to via `GfxService`.
+
+```cpp
+IMPORT_SERVICE(WindowService, svc_window);
+
+WindowDesc desc = WINDOW_DESC_INIT;
+desc.title = "My auxiliary view";
+desc.on_event = on_window_event;
+WindowHandle window = 0;
+svc_window->create_window(mod_ctx, &desc, &window);
+```
+
+Window callbacks run on the game thread. A close event is only a request; call `destroy_window` when the mod is ready to
+close it. A window attached to a GfxService present target cannot be destroyed until that target is unregistered. Only
+one present target may be attached to a WindowService window at a time.
+
+New windows are hidden by default so a mod can finish attaching graphics before calling `show_window`.
 
 ### GfxService (`mods/svc/gfx.h`)
 
@@ -451,6 +590,30 @@ registered with `register_compute_type` follow the same worker-thread rule and r
 All WGPU handles from the service are borrowed. Resolved target views are valid for the current frame only. GPU objects
 created by a mod are owned by that mod and should be released in `mod_shutdown`.
 
+#### External presentation
+
+GfxService supports external presentation ("present targets") backed by either a WindowService window (via
+`register_window_present_target`) or a plain `WGPUSurface` (via `register_present_target`).
+
+```cpp
+GfxPresentTargetDesc target_desc = GFX_PRESENT_TARGET_DESC_INIT;
+target_desc.render = render_auxiliary_view;
+GfxPresentTargetHandle target = 0;
+svc_gfx->register_window_present_target(mod_ctx, window, &target_desc, &target);
+
+// From a stage callback:
+svc_gfx->push_present(mod_ctx, target, &payload, sizeof(payload));
+```
+
+For WindowService windows, the surface is automatically reconfigured on window size changes.
+For plain `WBPUSurface`s, `resize_present_target` must be used to resize.
+
+To create a `WGPUSurface` manually, `GfxDeviceInfo` holds the `WGPUInstance` and `WGPUAdapter` which can be used with
+`wgpuInstanceCreateSurface` and a chained `WGPUSurfaceSource*` struct.
+
+`push_present` must be called every frame from a GfxService stage callback. If surface was lost, `push_present` returns
+`MOD_ERROR`. Unregister and re-register the target before trying again.
+
 ### CameraService (`mods/svc/camera.h`)
 
 Converts a game view provided by a render callback into WebGPU-convention camera data. Matrix fields are column-major
@@ -470,6 +633,9 @@ if (svc_camera->get_camera(mod_ctx, game_view, &camera) == MOD_OK) {
 first in-game frame. Projection matrices match the renderer's WebGPU clip convention and renderer depth convention
 (reversed-Z by default).
 
+Camera operators allow overriding the main camera. When an operator callback returns true, its values replace the camera
+state for the current frame. Register and unregister using `register_camera_operator` / `unregister_camera_operator`.
+
 ---
 
 ## Hooking Game Functions
@@ -477,11 +643,10 @@ first in-game frame. Projection matrices match the renderer's WebGPU clip conven
 **Requires `add_mod(... FEATURES game)`**
 
 Mods may hook the vast majority of game functions, including file-local static, private and virtual functions.
-`mods/hook.hpp` provides typed helpers over the hook service:
+`mods/svc/hook.hpp` provides typed helpers over the hook service:
 
 ```cpp
-#include "mods/hook.hpp"
-#include "mods/svc/hook.h"
+#include "mods/svc/hook.hpp"
 
 IMPORT_SERVICE(HookService, svc_hook);
 
@@ -505,7 +670,7 @@ HookAction on_pos_move_pre(ModContext*, void* args, void* retval, void* userdata
     return HOOK_CONTINUE;
 }
 
-mods::hook_add_pre<LinkPosMove>(svc_hook, on_pos_move_pre);
+mods::hook::add_pre<LinkPosMove>(on_pos_move_pre);
 ```
 
 ### Post-hooks
@@ -516,7 +681,7 @@ if any.
 ```cpp
 void on_pos_move_post(ModContext*, void* args, void* retval, void* userdata) { ... }
 
-mods::hook_add_post<LinkPosMove>(svc_hook, on_pos_move_post);
+mods::hook::add_post<LinkPosMove>(on_pos_move_post);
 ```
 
 ### Replace-hooks
@@ -531,7 +696,7 @@ void on_execute_replace(ModContext*, void* args, void* retval, void*) {
     }
 }
 
-mods::hook_replace<LinkExecute>(svc_hook, on_execute_replace);
+mods::hook::replace<LinkExecute>(on_execute_replace);
 ```
 
 By default a second replace-hook on the same function is a conflict; `HookOptions` (`replace_policy`, `priority`,
@@ -547,7 +712,7 @@ symbol name instead. You must supply the signature along with the name.
 DEFINE_HOOK_SYMBOL("daAlink_hookshotAtHitCallBack",
     void(fopAc_ac_c*, dCcD_GObjInf*, fopAc_ac_c*, dCcD_GObjInf*), HookshotHit);
 
-mods::hook_add_pre<HookshotHit>(svc_hook, on_hookshot_hit_pre);
+mods::hook::add_pre<HookshotHit>(on_hookshot_hit_pre);
 ...
 HookshotHit::g_orig(link, atObjInf, target, tgObjInf);  // call through to the original
 ```
@@ -587,7 +752,7 @@ HookAction on_create_item_pre(ModContext*, void* args, void*, void*) {
     return HOOK_CONTINUE;
 }
 
-mods::hook_add_pre<CreateItem>(svc_hook, on_create_item_pre);
+mods::hook::add_pre<CreateItem>(on_create_item_pre);
 ```
 
 For reference parameters (e.g. `const cXyz& pos`), `arg_ref<cXyz>` yields a direct reference.
@@ -773,6 +938,6 @@ const char* nativeDir = svc_host->native_dir(mod_ctx);  // read-only
 ```
 
 Libraries loaded explicitly by the mod remain its responsibility: stop their threads and unload them during
-`mod_shutdown`. Do not write into `native_dir`; use `mod_dir` for writable state. Native library namespaces are
-process-wide on some platforms, so two mods cannot safely assume that incompatible libraries with the same filename
-will remain isolated.
+`mod_shutdown`. Do not write into `native_dir`; use `data_dir` for persistent storage or `mod_dir` for temporary
+(session) storage. Native library namespaces are process-wide on some platforms, so two mods cannot safely assume that
+incompatible libraries with the same filename will remain isolated.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -16,6 +17,14 @@ namespace dusk::io {
 inline std::filesystem::path fs_path_from_string(std::string_view utf8Path) {
     return std::filesystem::path{std::u8string_view{
         reinterpret_cast<const char8_t*>(utf8Path.data()), utf8Path.size()}};
+}
+
+/**
+ * Converts a std::filesystem::path to a std::string, UTF-8, without exploding on Windows.
+ */
+inline std::string fs_path_to_string(const std::filesystem::path& path) {
+    const auto u8str = path.u8string();
+    return {reinterpret_cast<const char*>(u8str.c_str())};
 }
 
 /**
@@ -104,13 +113,5 @@ public:
 
     FILE* ToInner();
 };
-
-/**
- * Converts a std::filesystem::path to a std::string, UTF-8, without exploding on Windows.
- */
-inline std::string fs_path_to_string(const std::filesystem::path& path) {
-    const auto u8str = path.u8string();
-    return {reinterpret_cast<const char*>(u8str.c_str())};
-}
 
 }  // namespace dusk::io

@@ -1,11 +1,11 @@
-#if DUSK_ENABLE_SENTRY_NATIVE
+#if BOREALIS_HAS_SENTRY
 
 #include "reporting.hpp"
 
 #include "button.hpp"
-#include "dusk/crash_reporting.h"
 #include "ui.hpp"
 
+#include <borealis/sentry.hpp>
 #include <dolphin/gx/GXAurora.h>
 
 namespace dusk::ui {
@@ -39,10 +39,10 @@ CrashReportWindow::CrashReportWindow() : WindowSmall("modal", "modal-dialog") {
     static constexpr OptionInfo kOptions[] = {
         {"[ENABLE]",
             "[SEND_CRASH_REPORTS_TO_DUSKLIGHT_DEVELOPERS_REPORTS_WILL_INCLUDE_THE_INFOR]",
-            [] { crash_reporting::set_consent(true); }},
+            [] { borealis::sentry::set_consent(true); }},
         {"[DISABLE]",
             "[DO_NOT_SEND_CRASH_REPORTS_THIS_MAY_MAKE_IT_MORE_DIFFICULT_TO_RESOLVE_ISS]",
-            [] { crash_reporting::set_consent(false); }},
+            [] { borealis::sentry::set_consent(false); }},
     };
 
     for (const auto& option : kOptions) {

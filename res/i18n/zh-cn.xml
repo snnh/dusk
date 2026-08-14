@@ -274,6 +274,7 @@
   <entry key="ADJUSTS_THE_VOLUME_OF_ALL_SOUNDS_IN_THE_GAME">调整游戏中所有声音的音量。</entry>
   <entry key="ALLOW_BACKGROUND_INPUT">允许后台输入</entry>
   <entry key="ALLOW_CONTROLLER_INPUT_EVEN_WHEN_THE_GAME_WINDOW_IS_NOT_FOCUSED">游戏窗口未激活时也允许手柄输入。</entry>
+  <entry key="AIMING_RETICLE">瞄准准星</entry>
   <entry key="ALLOWS_WOLF_LINK_TO_HOWL_AND_CHANGE_THE_TIME_OF_DAY">允许狼形态林克嚎叫并改变时间。</entry>
   <entry key="ALWAYS_COLLECT_RUPEES_EVEN_IF_YOUR_WALLET_IS_TOO_FULL">即使钱包已满仍继续收集卢比。</entry>
   <entry key="AUTOSAVE">自动存档</entry>
@@ -923,6 +924,7 @@
   <entry key="RENDER_A_BLURRING_EFFECT_FOR_OUT_OF_FOCUS_AREAS_IN_SOME_SITUATIONS_MAY">在某些情况下为失焦区域渲染模糊效果。可<br/>能影响性能。</entry>
   <entry key="RENDER_A_THICK_SHADOW_AROUND_THE_MINI_MAP_MAY_IMPACT_PERFORMANCE">在小地图周围渲染较粗的阴影。可能影响性<br/>能。</entry>
   <entry key="SHOW_POE_COUNT_ON_MAP">在地图显示幽灵之魂数量。</entry>
+  <entry key="SHOWS_THE_AIMING_RETICLE_FOR_BOW_AND_SLINGSHOT">显示弓箭和弹弓的瞄准准星。</entry>
   <entry key="CHANGES_HOW_THE_COLLECTION_AND_FILE_SELECT_MENUS_SCALE_TO_YOUR_ASPECT_RATIO"><br/>更改收藏菜单和文件选择菜单如何按宽高比<br/>缩放。</entry>
   <entry key="DISPLAYS_COLLECTED_TOTAL_NUMBER_OF_POE_SOULS_FOR_A_REGION_ON_THE_MAP">在地图上显示某区域已收集/总数的幽灵之<br/>魂数量。</entry>
   <entry key="HIDE_OWL_STATUE_MARKERS">隐藏猫头鹰石像标记。</entry>

@@ -275,6 +275,7 @@
   <entry key="ADJUSTS_THE_VOLUME_OF_ALL_SOUNDS_IN_THE_GAME">Adjusts the volume of all sounds in the game.</entry>
   <entry key="ALLOW_BACKGROUND_INPUT">Allow Background Input</entry>
   <entry key="ALLOW_CONTROLLER_INPUT_EVEN_WHEN_THE_GAME_WINDOW_IS_NOT_FOCUSED">Allow controller input even when the game window is not focused.</entry>
+  <entry key="AIMING_RETICLE">Aiming Reticle</entry>
   <entry key="ALLOWS_WOLF_LINK_TO_HOWL_AND_CHANGE_THE_TIME_OF_DAY">Allows Wolf Link to howl and change the time of day.</entry>
   <entry key="ALWAYS_COLLECT_RUPEES_EVEN_IF_YOUR_WALLET_IS_TOO_FULL">Always collect Rupees even if your Wallet is too full.</entry>
   <entry key="AUTOSAVE">Autosave</entry>
@@ -387,6 +388,7 @@
   <entry key="SHADOW_RESOLUTION">Shadow Resolution</entry>
   <entry key="SHOW_FPS_COUNTER">Show FPS Counter</entry>
   <entry key="SHOW_POE_COUNT_ON_MAP">Show Poe Count on Map</entry>
+  <entry key="SHOWS_THE_AIMING_RETICLE_FOR_BOW_AND_SLINGSHOT">Shows the aiming reticle for bow and slingshot.</entry>
   <entry key="SHOW_RTA">Show RTA</entry>
   <entry key="SKIP_NEEDING_TO_CATCH_A_SECOND_FISH_FOR_SERA_S_CAT">Skip needing to catch a second fish for Sera's cat.</entry>
   <entry key="SKIPS_THE_DELAY_WHEN_WRITING_TO_THE_MEMORY_CARD">Skips the delay when writing to the Memory Card.</entry>

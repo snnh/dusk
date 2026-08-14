@@ -20,19 +20,21 @@
 #include "dusk/io.hpp"
 #include "dusk/settings.h"
 #include "i18n.hpp"
+#include <borealis/io.hpp>
 #include "icon_provider.hpp"
 #include "input.hpp"
 #include "mod_texture_provider.hpp"
 #include "prelaunch.hpp"
 #include "window.hpp"
+#include <borealis/log.hpp>
 
 namespace dusk::ui {
 namespace {
 
-aurora::Module UiLog{"dusk::ui"};
+borealis::Log UiLog{"dusk::ui"};
 
 void load_font(const char* filename, bool fallback = false) {
-    if (!Rml::LoadFontFace(io::fs_path_to_string(resource_path(filename)), fallback)) {
+    if (!Rml::LoadFontFace(borealis::io::fs_path_to_string(resource_path(filename)), fallback)) {
         UiLog.error("Failed to load font '{}'", filename);
     }
 }
